@@ -1,9 +1,10 @@
 # Generated PKI (contains the CA private key -- back it up somewhere safe)
-/pki/
-/collections/
+/pki
+/collections
 # Offline asset cache (GBs of images/artifacts); built by build-cache.yml
-/cache/
+/cache
 *.retry
+/.ansible/
 /.venv
 .vault_pass*
 # Ansible Vault secrets (encrypted, but kept out of git)
