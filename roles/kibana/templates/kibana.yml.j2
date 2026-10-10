@@ -20,6 +20,9 @@ xpack.reporting.encryptionKey: "{{ kibana_reporting_key }}"
 # are read-only in the Fleet UI.
 # ---------------------------------------------------------------------------
 xpack.fleet.registryUrl: "{{ kibana_registry_url }}"
+# Don't query elastic.co (e.g. for the latest agent version, which made the
+# Add agent flow suggest versions newer than this stack/mirror).
+xpack.fleet.isAirGapped: true
 
 xpack.fleet.fleetServerHosts:
   - id: default-fleet-server-host
