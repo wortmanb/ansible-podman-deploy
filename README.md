@@ -72,6 +72,16 @@ cluster with `cluster.initial_master_nodes`. The second run sees the existing
 data volumes, removes that setting (as Elastic recommends), and does a rolling
 restart.
 
+If the first run fails before the cluster forms, the data volumes already exist,
+so later runs won't bootstrap. Either delete the volumes (see below) or force
+bootstrap with `-e elasticsearch_bootstrap=true`.
+
+```bash
+# as the elastic user on podman1 -- destroys all ES data
+systemctl --user stop es01 es02 es03
+podman volume rm es01-data es02-data es03-data
+```
+
 Afterwards:
 
 * Kibana: https://podman2.lab.thewortmans.org:5601 (user `elastic`)

@@ -22,7 +22,10 @@ xpack.security.http.ssl:
 
 xpack.security.transport.ssl:
   enabled: true
-  verification_mode: full
+  # Nodes reconnect via container IPs (publish addresses), which aren't in
+  # the cert SANs, so hostname verification ("full") breaks cluster
+  # formation. The private CA only issues certs to these nodes.
+  verification_mode: certificate
   key: certs/node.key
   certificate: certs/node.crt
   certificate_authorities: [certs/ca.crt]
