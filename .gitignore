@@ -4,3 +4,5 @@ collections/
 *.retry
 .venv/
 .vault_pass*
+# Ansible Vault secrets (encrypted, but kept out of git)
+inventory/group_vars/all/vault.yml
