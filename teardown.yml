@@ -127,10 +127,14 @@
         path: /etc/sysctl.d/90-podman-elastic.conf
         state: absent
 
-    - name: Restore kernel defaults
+    # Reset to the kernel default, then re-apply the OS's own sysctl.d files
+    # so distro values win (e.g. RHEL 10 ships vm.max_map_count=1048576).
+    - name: Restore OS sysctl defaults
       ansible.builtin.shell: >-
-        [ "$(sysctl -n {{ item }})" = "{{ teardown_sysctl_defaults[item] }}" ]
-        || { sysctl -qw {{ item }}={{ teardown_sysctl_defaults[item] }} && echo changed; }
+        before="$(sysctl -n {{ item }})";
+        sysctl -qw {{ item }}={{ teardown_sysctl_defaults[item] }} &&
+        sysctl -q --system &&
+        [ "$(sysctl -n {{ item }})" = "$before" ] || echo changed
       loop: "{{ podman_host_sysctls | default({}) | list }}"
       register: teardown_sysctl
       changed_when: "'changed' in teardown_sysctl.stdout"

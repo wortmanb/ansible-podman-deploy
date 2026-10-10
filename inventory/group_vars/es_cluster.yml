@@ -1,5 +1,6 @@
 ---
 podman_host_sysctls:
-  vm.max_map_count: 262144
+  # ES needs >= 262144; 1048576 matches RHEL 10's default so we never lower it.
+  vm.max_map_count: 1048576
 podman_host_firewall_ports:
   - "{{ es_nodes[0].http_port }}-{{ es_nodes[-1].http_port }}/tcp"
