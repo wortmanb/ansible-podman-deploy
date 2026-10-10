@@ -1,8 +1,9 @@
 ---
-- name: Pull nginx image
-  containers.podman.podman_image:
-    name: "{{ nginx_image }}"
-  notify: Restart nginx
+- name: Ensure nginx image is present
+  ansible.builtin.include_role:
+    name: container_image
+  vars:
+    container_image_ref: "{{ nginx_image }}"
 
 - name: Deploy nginx directories
   ansible.builtin.file:
@@ -45,18 +46,18 @@
     mode: "0755"
   loop: "{{ nginx_artifact_mirror_files | map('dirname') | unique | list }}"
 
+# Populated by build-cache.yml; nothing is downloaded at deploy time.
 - name: Mirror Elastic GPG key
-  ansible.builtin.get_url:
-    url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+  ansible.builtin.copy:
+    src: "{{ cache_dir }}/artifacts/GPG-KEY-elasticsearch"
     dest: "{{ nginx_artifacts_dir }}/GPG-KEY-elasticsearch"
     mode: "0644"
 
 - name: Mirror Elastic artifacts
-  ansible.builtin.get_url:
-    url: "{{ nginx_artifact_mirror_upstream }}/{{ item }}"
+  ansible.builtin.copy:
+    src: "{{ cache_dir }}/artifacts/downloads/{{ item }}"
     dest: "{{ nginx_artifacts_dir }}/downloads/{{ item }}"
     mode: "0644"
-    timeout: 600
   loop: "{{ nginx_artifact_mirror_files }}"
 
 - name: Apply pending restarts

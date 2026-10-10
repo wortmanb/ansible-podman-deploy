@@ -1,0 +1,148 @@
+---
+# Populate cache/ with everything site.yml needs, for transfer to an
+# air-gapped network. Run on an internet-connected Linux x86_64 machine with
+# docker (or podman via podman-docker) available:
+#
+#   ansible-playbook -i localhost, build-cache.yml
+#
+# The inline inventory keeps vault.yml out of the picture (no secrets are
+# needed); shared settings come from group_vars/all/main.yml below.
+#
+# Safe to re-run: existing images/artifacts are skipped.
+- name: Build offline asset cache
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - inventory/group_vars/all/main.yml
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    build_cache_platform: linux/amd64
+    # Controller Python versions to fetch wheels for (ansible-core 2.20).
+    build_cache_python_versions: ["3.12", "3.13", "3.14"]
+    build_cache_wheel_platforms:
+      - manylinux2014_x86_64
+      - manylinux_2_17_x86_64
+      - manylinux_2_28_x86_64
+      - manylinux_2_34_x86_64
+
+  pre_tasks:
+    # Reuse the roles' defaults so image tags and artifact lists can't drift
+    # from what site.yml deploys.
+    - name: Load role defaults
+      ansible.builtin.include_vars:
+        file: "roles/{{ item }}/defaults/main.yml"
+      loop: [elasticsearch, kibana, fleet_server, epr, nginx]
+
+    # Namespaced so its empty container_image_ref can't override loop vars.
+    - name: Load image archive naming
+      ansible.builtin.include_vars:
+        file: roles/container_image/defaults/main.yml
+        name: container_image_defaults
+
+  tasks:
+    - name: Create cache directories
+      ansible.builtin.file:
+        path: "{{ cache_dir }}/{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: [images, artifacts/downloads, collections, python]
+
+    # --- Container images -------------------------------------------------
+    - name: Save container images
+      ansible.builtin.include_tasks: tasks/cache-image.yml
+      loop:
+        - "{{ elasticsearch_image }}"
+        - "{{ kibana_image }}"
+        - "{{ fleet_server_image }}"
+        - "{{ epr_image }}"
+        - "{{ nginx_image }}"
+      loop_control:
+        loop_var: container_image_ref
+
+    # --- Elastic Agent artifact mirror ------------------------------------
+    - name: Download Elastic GPG key
+      ansible.builtin.get_url:
+        url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+        dest: "{{ cache_dir }}/artifacts/GPG-KEY-elasticsearch"
+        mode: "0644"
+
+    - name: Create artifact directories
+      ansible.builtin.file:
+        path: "{{ cache_dir }}/artifacts/downloads/{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ nginx_artifact_mirror_files | map('dirname') | unique | list }}"
+
+    - name: Download Elastic Agent artifacts
+      ansible.builtin.get_url:
+        url: "{{ nginx_artifact_mirror_upstream }}/{{ item }}"
+        dest: "{{ cache_dir }}/artifacts/downloads/{{ item }}"
+        mode: "0644"
+        timeout: 600
+      loop: "{{ nginx_artifact_mirror_files }}"
+
+    - name: Verify artifact checksums
+      ansible.builtin.command:
+        cmd: "sha512sum -c {{ item | basename }}.sha512"
+        chdir: "{{ cache_dir }}/artifacts/downloads/{{ item | dirname }}"
+      loop: "{{ nginx_artifact_mirror_files | reject('search', '\\.(sha512|asc)$') | list }}"
+      changed_when: false
+
+    - name: Verify artifact signatures
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          export GNUPGHOME="$(mktemp -d)"
+          trap 'rm -rf "$GNUPGHOME"' EXIT
+          gpg --batch --quiet --import {{ cache_dir }}/artifacts/GPG-KEY-elasticsearch
+          gpg --batch --verify {{ item }}.asc {{ item }}
+        chdir: "{{ cache_dir }}/artifacts/downloads"
+        executable: /bin/bash
+      loop: "{{ nginx_artifact_mirror_files | reject('search', '\\.(sha512|asc)$') | list }}"
+      changed_when: false
+
+    # --- Controller toolchain ---------------------------------------------
+    - name: Download Ansible collections
+      ansible.builtin.command:
+        cmd: >-
+          ansible-galaxy collection download
+          -r {{ playbook_dir }}/requirements.yml -p {{ cache_dir }}/collections
+        creates: "{{ cache_dir }}/collections/requirements.yml"
+
+    - name: Download Python wheels
+      ansible.builtin.command:
+        cmd: >-
+          {{ ansible_playbook_python }} -m pip download
+          -r {{ playbook_dir }}/requirements.txt
+          -d {{ cache_dir }}/python
+          --only-binary=:all: --implementation cp
+          --python-version {{ item }}
+          {{ build_cache_wheel_platforms | map('regex_replace', '^', '--platform ') | join(' ') }}
+      loop: "{{ build_cache_python_versions }}"
+      register: build_cache_pip
+      changed_when: "'Saved ' in build_cache_pip.stdout"
+
+    # --- Integrity manifest -----------------------------------------------
+    - name: Write SHA256SUMS
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail &&
+          find images artifacts collections python -type f -print0 | sort -z
+          | xargs -0 sha256sum > SHA256SUMS
+        chdir: "{{ cache_dir }}"
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Report cache size
+      ansible.builtin.command:
+        cmd: du -shc images artifacts collections python
+        chdir: "{{ cache_dir }}"
+      register: build_cache_du
+      changed_when: false
+
+    - name: Show cache size
+      ansible.builtin.debug:
+        var: build_cache_du.stdout_lines

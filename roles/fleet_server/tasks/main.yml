@@ -1,8 +1,9 @@
 ---
-- name: Pull Elastic Agent image
-  containers.podman.podman_image:
-    name: "{{ fleet_server_image }}"
-  notify: Restart fleet-server
+- name: Ensure Elastic Agent image is present
+  ansible.builtin.include_role:
+    name: container_image
+  vars:
+    container_image_ref: "{{ fleet_server_image }}"
 
 - name: Fleet Server directories
   ansible.builtin.file:

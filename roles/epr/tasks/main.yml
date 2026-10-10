@@ -1,8 +1,9 @@
 ---
-- name: Pull EPR image
-  containers.podman.podman_image:
-    name: "{{ epr_image }}"
-  notify: Restart epr
+- name: Ensure EPR image is present
+  ansible.builtin.include_role:
+    name: container_image
+  vars:
+    container_image_ref: "{{ epr_image }}"
 
 - name: Services podman network
   ansible.builtin.template:

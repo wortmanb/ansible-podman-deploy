@@ -1,0 +1,13 @@
+---
+# Pull one image and save it to cache/images/ (included by build-cache.yml).
+- name: Save {{ container_image_ref }}
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      docker pull --quiet --platform {{ build_cache_platform }} {{ container_image_ref }} &&
+      docker save {{ container_image_ref }} -o {{ archive }}.part &&
+      mv {{ archive }}.part {{ archive }}
+    creates: "{{ archive }}"
+    executable: /bin/bash
+  vars:
+    archive: "{{ cache_dir }}/images/{{ container_image_defaults.container_image_archive }}"

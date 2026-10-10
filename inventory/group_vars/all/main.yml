@@ -38,6 +38,10 @@ fleet_server_url: "https://{{ services_host }}:{{ fleet_server_port }}"
 epr_public_url: "https://{{ services_host }}:{{ nginx_epr_port }}"
 artifacts_public_url: "https://{{ services_host }}/downloads/"
 
+# Offline asset cache (images, agent artifacts, wheels, collections) filled by
+# build-cache.yml. Deployments install only from here, never the internet.
+cache_dir: "{{ playbook_dir }}/cache"
+
 # Controller-side directory where the CA and service certs are generated.
 pki_dir: "{{ playbook_dir }}/pki"
 # Extra SANs added to the nginx cert (e.g. future epr./artifacts. CNAMEs).

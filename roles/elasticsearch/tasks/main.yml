@@ -12,9 +12,11 @@
   ansible.builtin.set_fact:
     elasticsearch_bootstrap: "{{ elasticsearch_volume_check.results | selectattr('rc', 'eq', 0) | list | length == 0 }}"
 
-- name: Pull Elasticsearch image
-  containers.podman.podman_image:
-    name: "{{ elasticsearch_image }}"
+- name: Ensure Elasticsearch image is present
+  ansible.builtin.include_role:
+    name: container_image
+  vars:
+    container_image_ref: "{{ elasticsearch_image }}"
 
 - name: Elasticsearch podman network
   ansible.builtin.template:

@@ -1,0 +1,5 @@
+---
+# Image reference to ensure is present (set by the including role).
+container_image_ref: ""
+# Archive name in {{ cache_dir }}/images/ (shared with build-cache.yml).
+container_image_archive: "{{ container_image_ref | regex_replace('[/:@]', '_') }}.tar"

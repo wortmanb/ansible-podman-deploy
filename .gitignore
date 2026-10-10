@@ -1,6 +1,8 @@
 # Generated PKI (contains the CA private key -- back it up somewhere safe)
 pki/
 collections/
+# Offline asset cache (GBs of images/artifacts); built by build-cache.yml
+cache/
 *.retry
 .venv/
 .vault_pass*

@@ -1,8 +1,9 @@
 ---
-- name: Pull Kibana image
-  containers.podman.podman_image:
-    name: "{{ kibana_image }}"
-  notify: Restart kibana
+- name: Ensure Kibana image is present
+  ansible.builtin.include_role:
+    name: container_image
+  vars:
+    container_image_ref: "{{ kibana_image }}"
 
 - name: Kibana directories
   ansible.builtin.file:

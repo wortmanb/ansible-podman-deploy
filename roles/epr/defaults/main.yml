@@ -1,6 +1,6 @@
 ---
-# The full "distribution" image bundles every package (large, ~10+ GB).
-# Use "lite-{{ elastic_version }}" for a much smaller subset.
-epr_image_tag: "{{ elastic_version }}"
+# "lite" carries recent versions of common packages (~4 GB). Use
+# "{{ elastic_version }}" for the full distribution (every package, ~23 GB).
+epr_image_tag: "lite-{{ elastic_version }}"
 epr_image: "{{ elastic_registry }}/package-registry/distribution:{{ epr_image_tag }}"
 epr_quadlet_dir: "{{ podman_home }}/.config/containers/systemd"

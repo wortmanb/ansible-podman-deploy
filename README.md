@@ -22,12 +22,16 @@ systemd units.
 ## Layout
 
 ```
-site.yml                     # entry point
+site.yml                     # entry point: deploys from cache/
+build-cache.yml              # fills cache/ (run on an internet-connected box)
+tasks/cache-image.yml        # pull + save one image (used by build-cache.yml)
+cache/                       # offline assets; gitignored, see "Air-gapped deployment"
 inventory/hosts.yml          # podman1 -> es_cluster, podman2 -> services
 inventory/group_vars/        # versions, ports, heap, URLs, secrets (vault)
 roles/
   pki/            # controller: self-signed CA + per-service certs in ./pki
-  podman_host/    # packages, sysctls, service user, linger, firewalld
+  podman_host/    # packages, sysctls, service user, linger, firewalld, CA trust
+  container_image/ # loads an image from cache/images/ if the host lacks it
   elasticsearch/  # 3-node cluster, bootstrap detection, rolling restarts
   epr/            # Elastic Package Registry (internal only)
   nginx/          # TLS proxy for EPR (:8443) + artifact mirror (:443)
@@ -58,6 +62,16 @@ user with sudo. The inventory connects as your local `$USER`; override
 `ansible_user` in `inventory/hosts.yml` if needed.
 
 ## Usage
+
+`site.yml` never downloads anything: images and agent artifacts come from
+`cache/`, which `build-cache.yml` fills (see [Air-gapped deployment](#air-gapped-deployment)).
+Build the cache first, even on a connected network:
+
+```bash
+ansible-playbook -i localhost, build-cache.yml
+```
+
+Then:
 
 ```bash
 cp inventory/group_vars/all/vault.yml.example inventory/group_vars/all/vault.yml
@@ -91,6 +105,51 @@ Afterwards:
 * Enroll agents against `https://podman2.lab.thewortmans.org:8220` with
   `--certificate-authorities=/path/to/ca.crt`.
 
+## Air-gapped deployment
+
+`build-cache.yml` collects everything the deployment needs into `cache/`:
+
+| Path | Contents |
+|------|----------|
+| `cache/images/` | ES, Kibana, Elastic Agent, EPR (lite), nginx images (`docker save` archives, linux/amd64) |
+| `cache/artifacts/` | Elastic Agent packages for the mirror (+ `.sha512`, `.asc`) and `GPG-KEY-elasticsearch` |
+| `cache/collections/` | Ansible collection tarballs from `requirements.yml` |
+| `cache/python/` | Controller wheels from `requirements.txt` for CPython 3.12–3.14, Linux x86_64 |
+| `cache/SHA256SUMS` | Checksums of all of the above |
+
+Agent checksums and GPG signatures are verified during the build. What's
+mirrored is controlled by `nginx_artifact_mirror_platforms` (nginx role); the
+image list by each role's `*_image` variable.
+
+**Not cached:** OS packages (`podman`, `container-selinux`, `acl`,
+`ca-certificates`) still install with `dnf`, so the air-gapped hosts need a
+local RHEL/EL repository. Elastic Defend/Endpoint artifacts aren't mirrored.
+
+### On the connected side
+
+```bash
+ansible-playbook -i localhost, build-cache.yml   # needs docker, ~7 GB of downloads
+```
+
+Then copy the whole repo directory across, including the gitignored `cache/`,
+plus `pki/` and `vault.yml` if you want to keep the same CA and secrets.
+
+### On the air-gapped side
+
+```bash
+cd aerospace
+(cd cache && sha256sum -c --quiet SHA256SUMS)    # verify the transfer
+
+python3 -m venv .venv && . .venv/bin/activate
+pip install --no-index --find-links cache/python -r requirements.txt
+(cd cache/collections && ansible-galaxy collection install --offline -r requirements.yml -p ../../collections)
+
+ansible-playbook site.yml --ask-vault-pass --ask-become-pass
+```
+
+`site.yml` copies each image archive to a host only when that image is
+missing there, loads it with `podman load`, and deletes the archive.
+
 ## Notes and gotchas
 
 * **PKI**: `pki/` holds the CA private key and is gitignored. Back it up.
@@ -103,11 +162,13 @@ Afterwards:
 * **EPR**: Kibana reaches EPR directly at `http://epr:8080` on the podman
   network. nginx exposes it at `https://podman2...:8443` for external use. Set
   `kibana_registry_url: "{{ epr_public_url }}"` to send Kibana through nginx.
-  The full `distribution` image is very large. Set `epr_image_tag:
-  "lite-{{ elastic_version }}"` for a smaller one.
-* **Artifact mirror**: the nginx role downloads Elastic Agent packages
+  The `lite` image (~4 GB) is the default. Set `epr_image_tag:
+  "{{ elastic_version }}"` for the full distribution (~23 GB) and rebuild the
+  cache.
+* **Artifact mirror**: the nginx role copies Elastic Agent packages
   (+ `.sha512`/`.asc`) for `nginx_artifact_mirror_platforms` into
-  `/home/elastic/artifacts/downloads/`, served at `/downloads/`. That URL is
+  `/home/elastic/artifacts/downloads/` from `cache/artifacts/`, served at
+  `/downloads/`. That URL is
   configured as Fleet's default agent binary download source. Drop other files
   you want to serve into `/home/elastic/artifacts/`.
 * **Fleet Server service token** is created once and stored at
