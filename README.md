@@ -85,7 +85,9 @@ podman volume rm es01-data es02-data es03-data
 Afterwards:
 
 * Kibana: https://podman2.lab.thewortmans.org:5601 (user `elastic`)
-* Trust `pki/ca.crt` in your browser/OS and on enrolling agents.
+* Trust `pki/ca.crt` in your browser/OS and on enrolling agents. The
+  `podman_host` role already adds it to system trust on podman1/podman2
+  (disable with `podman_host_trust_ca: false`).
 * Enroll agents against `https://podman2.lab.thewortmans.org:8220` with
   `--certificate-authorities=/path/to/ca.crt`.
 

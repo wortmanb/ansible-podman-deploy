@@ -3,5 +3,10 @@ podman_host_packages:
   - podman
   - container-selinux
   - acl
+  - ca-certificates
 podman_host_sysctls: {}
 podman_host_firewall_ports: []
+
+# Install the lab CA into the host's system trust store.
+podman_host_trust_ca: true
+podman_host_ca_anchor: /etc/pki/ca-trust/source/anchors/lab-elastic-ca.crt

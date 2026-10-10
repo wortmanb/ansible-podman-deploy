@@ -4,6 +4,16 @@
     name: "{{ podman_host_packages }}"
     state: present
 
+- name: Trust the lab CA system-wide
+  ansible.builtin.copy:
+    src: "{{ pki_dir }}/ca.crt"
+    dest: "{{ podman_host_ca_anchor }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: podman_host_trust_ca | bool
+  notify: Update CA trust
+
 - name: Apply sysctls
   ansible.posix.sysctl:
     name: "{{ item.key }}"
