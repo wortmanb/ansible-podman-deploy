@@ -5,8 +5,9 @@ node.name: {{ es_node.name }}
 
 network.host: 0.0.0.0
 discovery.seed_hosts: {{ es_nodes | map(attribute='name') | list | to_json }}
-{% if elasticsearch_bootstrap | bool %}
-# Present only while bootstrapping; removed automatically on the next run.
+{% if elasticsearch_forming | bool %}
+# Present only while the cluster forms; site.yml removes it, with a rolling
+# restart, as soon as all nodes have joined.
 cluster.initial_master_nodes: {{ es_nodes | map(attribute='name') | list | to_json }}
 {% endif %}
 

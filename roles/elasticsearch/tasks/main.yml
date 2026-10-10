@@ -12,6 +12,13 @@
   ansible.builtin.set_fact:
     elasticsearch_bootstrap: "{{ elasticsearch_volume_check.results | selectattr('rc', 'eq', 0) | list | length == 0 }}"
 
+# Drives the config template and restart behaviour. Kept separate from
+# elasticsearch_bootstrap so that even a forced -e elasticsearch_bootstrap=true
+# finishes bootstrapping (and drops initial_master_nodes) within this run.
+- name: Track whether the cluster is still forming
+  ansible.builtin.set_fact:
+    elasticsearch_forming: "{{ elasticsearch_bootstrap | bool }}"
+
 - name: Ensure Elasticsearch image is present
   ansible.builtin.include_role:
     name: container_image
@@ -70,15 +77,7 @@
   notify: Restart elasticsearch
 
 - name: Node configuration
-  ansible.builtin.template:
-    src: elasticsearch.yml.j2
-    dest: "{{ elasticsearch_base_dir }}/{{ es_node.name }}/elasticsearch.yml"
-    mode: "0644"
-  loop: "{{ es_nodes }}"
-  loop_control:
-    loop_var: es_node
-    label: "{{ es_node.name }}"
-  notify: Restart elasticsearch
+  ansible.builtin.include_tasks: config.yml
 
 - name: Node environment (secrets)
   ansible.builtin.template:
@@ -117,6 +116,22 @@
 
 - name: Wait for cluster to form
   ansible.builtin.include_tasks: wait_for_cluster.yml
+
+# Elastic recommends removing cluster.initial_master_nodes once the cluster
+# has formed. Do it now, with a rolling restart, instead of on a second run.
+# Unconditional on purpose: after a bootstrap the re-render drops the setting
+# (and notifies the restart); otherwise it's unchanged and nothing restarts.
+# (Not a `when:` block: block conditions are re-checked for every task, so
+# the set_fact would make the block skip its own re-render.)
+- name: Mark the cluster as formed
+  ansible.builtin.set_fact:
+    elasticsearch_forming: false
+
+- name: Render final node configuration
+  ansible.builtin.include_tasks: config.yml
+
+- name: Rolling restart with the final configuration
+  ansible.builtin.meta: flush_handlers
 
 - name: Set kibana_system password
   ansible.builtin.uri:

@@ -1,0 +1,13 @@
+---
+# Render elasticsearch.yml for every node. Included twice on a new cluster:
+# once with cluster.initial_master_nodes, then again without it once formed.
+- name: Node configuration
+  ansible.builtin.template:
+    src: elasticsearch.yml.j2
+    dest: "{{ elasticsearch_base_dir }}/{{ es_node.name }}/elasticsearch.yml"
+    mode: "0644"
+  loop: "{{ es_nodes }}"
+  loop_control:
+    loop_var: es_node
+    label: "{{ es_node.name }}"
+  notify: Restart elasticsearch

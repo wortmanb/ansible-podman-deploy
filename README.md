@@ -110,17 +110,19 @@ ansible-playbook site.yml --ask-vault-pass --ask-become-pass
 
 (Drop `--ask-become-pass` if sudo on the hosts is passwordless.)
 
-Run the playbook **twice** on a fresh install. The first run bootstraps the
-cluster with `cluster.initial_master_nodes`. The second run sees the existing
-data volumes, removes that setting (as Elastic recommends), and does a rolling
-restart.
+One run is enough on a fresh install. When no Elasticsearch data volumes exist
+yet, `site.yml` starts the nodes with `cluster.initial_master_nodes`, waits for
+all of them to join, then removes that setting (as Elastic recommends) with a
+rolling restart, all in the same run.
 
-If the first run fails before the cluster forms, the data volumes already exist,
+If a first run fails before the cluster forms, the data volumes already exist,
 so later runs won't bootstrap. Either delete the volumes (see below) or force
-bootstrap with `-e elasticsearch_bootstrap=true`.
+bootstrap with `-e elasticsearch_bootstrap=true`, which also finishes within
+that run.
 
 ```bash
-# as the elastic user on podman1 -- destroys all ES data
+# as the elastic user on podman1 (sudo -iu elastic) -- destroys all ES data
+export XDG_RUNTIME_DIR=/run/user/$(id -u)   # sudo does not set it
 systemctl --user stop es01 es02 es03
 podman volume rm es01-data es02-data es03-data
 ```
@@ -321,7 +323,6 @@ quadlets, the `elastic` user and home directory (certs, configs, artifact
 mirror, Fleet service token), the sysctls, firewall ports and the external CA
 in system trust. It keeps OS packages and every site-specific file on the
 controller, so the next `site.yml` reuses the same certificates and passwords.
-Run `site.yml` twice afterwards, as on any fresh install.
 
 ## Notes and gotchas
 

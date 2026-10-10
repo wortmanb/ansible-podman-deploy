@@ -6,8 +6,8 @@
     scope: user
     daemon_reload: true
 
-# During bootstrap no quorum exists until all nodes are up, so only wait
+# While forming, no quorum exists until all nodes are up, so only wait
 # between nodes on an already-formed cluster (rolling restart).
 - name: Wait for cluster before restarting the next node
   ansible.builtin.include_tasks: wait_for_cluster.yml
-  when: not elasticsearch_bootstrap | bool
+  when: not elasticsearch_forming | bool
