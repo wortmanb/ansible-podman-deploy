@@ -35,9 +35,23 @@
     src: "{{ pki_dir }}/{{ item.1 | replace('node', item.0.name) }}"
     dest: "{{ elasticsearch_base_dir }}/{{ item.0.name }}/certs/{{ item.1 }}"
     mode: "{{ '0600' if item.1.endswith('.key') else '0644' }}"
-  loop: "{{ es_nodes | product(['ca.crt', 'node.crt', 'node.key']) | list }}"
+  loop: "{{ es_nodes | product(['ca.crt', 'node.key']) | list }}"
   loop_control:
     label: "{{ item.0.name }}/{{ item.1 }}"
+  notify: Restart elasticsearch
+
+# Serve the full chain (leaf + CA): Fleet outputs trust ES via
+# ca_trusted_fingerprint, which only matches a CA the server presents.
+- name: Node certificate chains
+  ansible.builtin.copy:
+    content: |
+      {{ lookup('ansible.builtin.file', pki_dir ~ '/' ~ item.name ~ '.crt') }}
+      {{ lookup('ansible.builtin.file', pki_dir ~ '/ca.crt') }}
+    dest: "{{ elasticsearch_base_dir }}/{{ item.name }}/certs/node.crt"
+    mode: "0644"
+  loop: "{{ es_nodes }}"
+  loop_control:
+    label: "{{ item.name }}"
   notify: Restart elasticsearch
 
 - name: Node configuration
