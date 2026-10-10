@@ -132,6 +132,22 @@ local RHEL/EL repository. Elastic Defend/Endpoint artifacts aren't mirrored.
 ansible-playbook -i localhost, build-cache.yml   # needs docker, ~7 GB of downloads
 ```
 
+It builds for `elastic_version` and the lite EPR image by default. Override
+either with `-e`, and set the same values in `inventory/group_vars/all/main.yml`
+before deploying, or `site.yml` won't find the images it expects:
+
+```bash
+# different stack version
+ansible-playbook -i localhost, build-cache.yml -e elastic_version=9.5.5
+
+# full EPR distribution (~23 GB instead of ~4 GB)
+ansible-playbook -i localhost, build-cache.yml -e 'epr_image_tag={{ elastic_version }}'
+```
+
+Re-running skips anything already cached. Archives are named by image and
+version, so building another version adds to `cache/` rather than replacing it;
+delete `cache/` first if you only want to transfer one version.
+
 Then copy the whole repo directory across, including the gitignored `cache/`,
 plus `pki/` and `vault.yml` if you want to keep the same CA and secrets.
 

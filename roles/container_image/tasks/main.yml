@@ -8,6 +8,22 @@
 - name: Load image from offline cache
   when: container_image_exists.rc == 1
   block:
+    - name: Check the cache has {{ container_image_archive }}
+      ansible.builtin.stat:
+        path: "{{ cache_dir }}/images/{{ container_image_archive }}"
+      delegate_to: localhost
+      become: false
+      register: container_image_cached
+
+    - name: Fail if the image isn't cached
+      ansible.builtin.assert:
+        that: container_image_cached.stat.exists
+        fail_msg: >-
+          {{ container_image_ref }} is not in {{ cache_dir }}/images/. Build the
+          cache with the same settings site.yml uses, e.g.
+          ansible-playbook -i localhost, build-cache.yml -e elastic_version={{ elastic_version }}
+          (add -e epr_image_tag=... if you've overridden it).
+
     - name: Copy image archive {{ container_image_archive }}
       ansible.builtin.copy:
         src: "{{ cache_dir }}/images/{{ container_image_archive }}"
