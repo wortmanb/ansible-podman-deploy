@@ -13,7 +13,7 @@
 
 - name: Kibana certificates
   ansible.builtin.copy:
-    src: "{{ pki_dir }}/{{ item.src }}"
+    src: "{{ tls_dir }}/{{ item.src }}"
     dest: "{{ kibana_base_dir }}/certs/{{ item.dest }}"
     mode: "{{ item.mode }}"
   loop:
@@ -48,7 +48,7 @@
 
 - name: Wait for Kibana to become available
   ansible.builtin.uri:
-    url: "https://localhost:{{ kibana_port }}/api/status"
+    url: "{{ kibana_url }}/api/status"
     url_username: elastic
     url_password: "{{ elastic_password }}"
     force_basic_auth: true
@@ -60,7 +60,7 @@
 
 - name: Wait for Fleet to preconfigure the Fleet Server policy
   ansible.builtin.uri:
-    url: "https://localhost:{{ kibana_port }}/api/fleet/agent_policies/{{ fleet_server_policy_id }}"
+    url: "{{ kibana_url }}/api/fleet/agent_policies/{{ fleet_server_policy_id }}"
     url_username: elastic
     url_password: "{{ elastic_password }}"
     force_basic_auth: true
@@ -72,7 +72,7 @@
 
 - name: Look up the agent download source
   ansible.builtin.uri:
-    url: "https://localhost:{{ kibana_port }}/api/fleet/agent_download_sources/{{ kibana_download_source_id }}"
+    url: "{{ kibana_url }}/api/fleet/agent_download_sources/{{ kibana_download_source_id }}"
     url_username: elastic
     url_password: "{{ elastic_password }}"
     force_basic_auth: true
@@ -83,7 +83,7 @@
 - name: Point Fleet at the local artifact mirror
   ansible.builtin.uri:
     url: >-
-      https://localhost:{{ kibana_port }}/api/fleet/agent_download_sources{{
+      {{ kibana_url }}/api/fleet/agent_download_sources{{
       '/' ~ kibana_download_source_id if kibana_download_source.status == 200 else '' }}
     method: "{{ 'PUT' if kibana_download_source.status == 200 else 'POST' }}"
     url_username: elastic

@@ -1,9 +1,16 @@
 ---
-- name: Create PKI directory
+- name: Check TLS mode
+  ansible.builtin.assert:
+    that: tls_mode in ['generated', 'provided']
+    fail_msg: "tls_mode must be 'generated' or 'provided', not '{{ tls_mode }}'"
+  tags: [always]
+
+- name: Create PKI directories
   ansible.builtin.file:
-    path: "{{ pki_dir }}"
+    path: "{{ item }}"
     state: directory
     mode: "0700"
+  loop: ["{{ pki_dir }}", "{{ tls_dir }}"]
 
 - name: CA private key
   community.crypto.openssl_privatekey:
@@ -41,22 +48,30 @@
     pki_cert_name: "{{ pki_cert.name }}"
     pki_cert_sans: ["DNS:{{ pki_cert.name }}", "DNS:{{ es_host }}"]
 
-- name: Service certificates
-  ansible.builtin.include_tasks: cert.yml
-  loop: "{{ pki_service_certs }}"
-  loop_control:
-    loop_var: pki_cert
-  vars:
-    pki_cert_name: "{{ pki_cert.name }}"
-    pki_cert_sans: "{{ pki_cert.sans }}"
+- name: Generated external certificates
+  ansible.builtin.include_tasks: generated.yml
+  when: tls_mode == 'generated'
 
-- name: Read CA certificate info
-  community.crypto.x509_certificate_info:
-    path: "{{ pki_dir }}/ca.crt"
-  register: pki_ca_info
+- name: Provided external certificates
+  ansible.builtin.include_tasks: provided.yml
+  when: tls_mode == 'provided'
+
+# Elasticsearch serves the full chain in issuer order (Java rejects
+# out-of-order or duplicate certs). Fleet's ES output trusts the top of this
+# chain by fingerprint, which works because ES presents it.
+- name: Build ordered Elasticsearch HTTP chain
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_playbook_python }}"
+      - "{{ role_path }}/files/build_chain.py"
+      - "{{ tls_dir }}/es-http.crt"
+      - "{{ tls_dir }}/ca.crt"
+      - "{{ tls_dir }}/es-http-chain.crt"
+  register: pki_es_chain
+  changed_when: (pki_es_chain.stdout | from_json).changed
   tags: [always]
 
-- name: Record CA SHA-256 fingerprint (used by Fleet outputs)
+- name: Record external CA SHA-256 fingerprint
   ansible.builtin.set_fact:
-    pki_ca_fingerprint: "{{ pki_ca_info.fingerprints.sha256 | replace(':', '') | upper }}"
+    pki_ca_fingerprint: "{{ (pki_es_chain.stdout | from_json).top_fingerprint }}"
   tags: [always]

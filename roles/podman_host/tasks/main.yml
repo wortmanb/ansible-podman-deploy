@@ -6,7 +6,7 @@
 
 - name: Trust the lab CA system-wide
   ansible.builtin.copy:
-    src: "{{ pki_dir }}/ca.crt"
+    src: "{{ tls_dir }}/ca.crt"
     dest: "{{ podman_host_ca_anchor }}"
     owner: root
     group: root

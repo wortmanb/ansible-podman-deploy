@@ -1,0 +1,50 @@
+---
+- name: Check provided files for {{ pki_ext.name }}
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: ["{{ pki_ext_cert }}", "{{ pki_ext_key }}"]
+  register: pki_ext_files
+
+- name: Fail if files are missing for {{ pki_ext.name }}
+  ansible.builtin.assert:
+    that: pki_ext_files.results | map(attribute='stat.exists') | min
+    fail_msg: >-
+      Missing {{ pki_ext_files.results | rejectattr('stat.exists') | map(attribute='item') | join(', ') }}
+      (set tls_provided_files['{{ pki_ext.name }}'] to the right names)
+
+- name: Read certificate for {{ pki_ext.name }}
+  community.crypto.x509_certificate_info:
+    path: "{{ pki_ext_cert }}"
+  register: pki_ext_cert_info
+
+- name: Read private key for {{ pki_ext.name }}
+  community.crypto.openssl_privatekey_info:
+    path: "{{ pki_ext_key }}"
+  register: pki_ext_key_info
+  no_log: true
+
+- name: Verify chain for {{ pki_ext.name }}
+  ansible.builtin.command: >-
+    openssl verify -CAfile {{ tls_provided_dir }}/{{ tls_provided_ca }}
+    -untrusted {{ pki_ext_cert }} {{ pki_ext_cert }}
+  register: pki_ext_verify
+  changed_when: false
+  failed_when: false
+
+- name: Check certificate for {{ pki_ext.name }}
+  vars:
+    pki_ext_sans: "{{ pki_ext_cert_info.subject_alt_name | default([]) }}"
+    pki_ext_wildcard: "DNS:*.{{ pki_ext.host.split('.', 1)[1] | default('') }}"
+  ansible.builtin.assert:
+    that:
+      - not pki_ext_cert_info.expired
+      - pki_ext_key_info.public_key == pki_ext_cert_info.public_key
+      - ('DNS:' ~ pki_ext.host) in pki_ext_sans or pki_ext_wildcard in pki_ext_sans
+      - pki_ext_verify.rc == 0
+    fail_msg: >-
+      {{ pki_ext_cert }} for {{ pki_ext.name }} is not usable:
+      expired={{ pki_ext_cert_info.expired }};
+      key matches={{ pki_ext_key_info.public_key == pki_ext_cert_info.public_key }};
+      SANs={{ pki_ext_sans }} (need DNS:{{ pki_ext.host }} or {{ pki_ext_wildcard }});
+      chain to {{ tls_provided_ca }}: {{ pki_ext_verify.stdout | default('') }} {{ pki_ext_verify.stderr | default('') }}
+    quiet: true

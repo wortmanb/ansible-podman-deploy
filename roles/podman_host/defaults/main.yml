@@ -7,6 +7,6 @@ podman_host_packages:
 podman_host_sysctls: {}
 podman_host_firewall_ports: []
 
-# Install the lab CA into the host's system trust store.
+# Install the external CA bundle (generated or provided) into system trust.
 podman_host_trust_ca: true
 podman_host_ca_anchor: /etc/pki/ca-trust/source/anchors/lab-elastic-ca.crt

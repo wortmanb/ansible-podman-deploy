@@ -1,0 +1,24 @@
+---
+- name: Issue external certificates from the internal CA
+  ansible.builtin.include_tasks: cert.yml
+  loop: "{{ pki_service_certs }}"
+  loop_control:
+    loop_var: pki_cert
+  vars:
+    pki_cert_name: "{{ pki_cert.name }}"
+    pki_cert_sans: "{{ pki_cert.sans }}"
+
+- name: Stage generated external certificates
+  ansible.builtin.copy:
+    src: "{{ pki_dir }}/{{ item.0.name }}.{{ item.1 }}"
+    dest: "{{ tls_dir }}/{{ item.0.name }}.{{ item.1 }}"
+    mode: "{{ '0600' if item.1 == 'key' else '0644' }}"
+  loop: "{{ tls_external_certs | product(['crt', 'key']) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}.{{ item.1 }}"
+
+- name: Stage internal CA as the external trust bundle
+  ansible.builtin.copy:
+    src: "{{ pki_dir }}/ca.crt"
+    dest: "{{ tls_dir }}/ca.crt"
+    mode: "0644"

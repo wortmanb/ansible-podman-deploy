@@ -13,7 +13,7 @@
 
 - name: Fleet Server certificates
   ansible.builtin.copy:
-    src: "{{ pki_dir }}/{{ item.src }}"
+    src: "{{ tls_dir }}/{{ item.src }}"
     dest: "{{ fleet_server_base_dir }}/certs/{{ item.dest }}"
     mode: "{{ item.mode }}"
   loop:
@@ -92,7 +92,7 @@
 
 - name: Wait for Fleet Server to report healthy
   ansible.builtin.uri:
-    url: "https://localhost:{{ fleet_server_port }}/api/status"
+    url: "{{ fleet_server_url }}/api/status"
     ca_path: "{{ fleet_server_base_dir }}/certs/ca.crt"
   register: fleet_server_status
   until: fleet_server_status.json.status | default('') == 'HEALTHY'

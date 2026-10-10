@@ -1,0 +1,21 @@
+---
+# Site-specific settings. Copy to overrides.yml (gitignored):
+#   cp inventory/group_vars/all/overrides.yml.example inventory/group_vars/all/overrides.yml
+# Files in group_vars/all/ load alphabetically and later files win, so values
+# here override main.yml (and any role default). build-cache.yml reads this
+# file too, so versions set here also apply to the offline cache.
+
+# --- Customer-provided TLS certificates (README: "TLS certificates") -------
+# tls_mode: provided
+# tls_provided_dir: "{{ playbook_dir }}/certs"
+# tls_provided_ca: ca.crt
+# tls_provided_files:
+#   es-http: { cert: podman1.crt, key: podman1.key }
+#   kibana: { cert: podman2.crt, key: podman2.key }
+#   fleet-server: { cert: podman2.crt, key: podman2.key }
+#   nginx: { cert: podman2.crt, key: podman2.key }
+
+# --- Other common site settings ---------------------------------------------
+# elastic_version: "9.5.4"
+# es_heap: 4g
+# epr_image_tag: "{{ elastic_version }}"   # full EPR distribution instead of lite

@@ -36,6 +36,15 @@
         file: "roles/{{ item }}/defaults/main.yml"
       loop: [elasticsearch, kibana, fleet_server, epr, nginx]
 
+    # Site overrides (gitignored) win over main.yml and role defaults, as in
+    # site.yml, so the cache matches what will be deployed.
+    - name: Load site overrides, if present
+      ansible.builtin.include_vars:
+        file: "{{ item }}"
+      with_first_found:
+        - files: [inventory/group_vars/all/overrides.yml]
+          skip: true
+
     # Namespaced so its empty container_image_ref can't override loop vars.
     - name: Load image archive naming
       ansible.builtin.include_vars:

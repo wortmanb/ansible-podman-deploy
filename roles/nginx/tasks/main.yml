@@ -16,7 +16,7 @@
 
 - name: Deploy nginx certificates
   ansible.builtin.copy:
-    src: "{{ pki_dir }}/{{ item.src }}"
+    src: "{{ tls_dir }}/{{ item.src }}"
     dest: "{{ nginx_base_dir }}/certs/{{ item.dest }}"
     mode: "{{ item.mode }}"
   loop:

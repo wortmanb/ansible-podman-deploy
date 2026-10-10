@@ -11,3 +11,7 @@
 inventory/group_vars/all/vault.yml
 # Site-specific hostnames; see inventory/hosts.yml.example
 inventory/hosts.yml
+# Site-specific settings; see inventory/group_vars/all/overrides.yml.example
+inventory/group_vars/all/overrides.yml
+# Customer-provided TLS certs and private keys (tls_mode: provided)
+/certs/

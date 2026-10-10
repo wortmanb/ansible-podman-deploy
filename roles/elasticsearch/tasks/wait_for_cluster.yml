@@ -2,11 +2,11 @@
 - name: Wait for all nodes to join and cluster health to reach yellow
   ansible.builtin.uri:
     url: >-
-      https://localhost:{{ es_nodes[0].http_port }}/_cluster/health?wait_for_nodes={{ es_nodes | length }}&wait_for_status=yellow&timeout=10s
+      {{ es_urls[0] }}/_cluster/health?wait_for_nodes={{ es_nodes | length }}&wait_for_status=yellow&timeout=10s
     url_username: elastic
     url_password: "{{ elastic_password }}"
     force_basic_auth: true
-    ca_path: "{{ elasticsearch_base_dir }}/{{ es_nodes[0].name }}/certs/ca.crt"
+    ca_path: "{{ elasticsearch_base_dir }}/{{ es_nodes[0].name }}/certs/http-ca.crt"
   register: elasticsearch_health
   until: elasticsearch_health.status | default(0) == 200
   retries: 60

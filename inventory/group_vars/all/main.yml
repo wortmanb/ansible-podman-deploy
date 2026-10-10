@@ -44,8 +44,38 @@ cache_dir: "{{ playbook_dir }}/cache"
 
 # Controller-side directory where the CA and service certs are generated.
 pki_dir: "{{ playbook_dir }}/pki"
-# Extra SANs added to the nginx cert (e.g. future epr./artifacts. CNAMEs).
+# Extra SANs added to the generated nginx cert (e.g. epr./artifacts. CNAMEs).
 nginx_extra_sans: []
+
+# ---------------------------------------------------------------------------
+# TLS for external interfaces: Elasticsearch HTTP (9200-9202), Kibana, Fleet
+# Server and nginx (artifact mirror + EPR proxy).
+#   generated - issue certs from the internal CA in pki/ (default)
+#   provided  - use customer-supplied certs from tls_provided_dir
+# ES node-to-node transport always uses the internal CA.
+# ---------------------------------------------------------------------------
+tls_mode: generated
+tls_provided_dir: "{{ playbook_dir }}/certs"
+# CA bundle (PEM; intermediates and/or root) that issued the provided certs.
+tls_provided_ca: ca.crt
+# Cert (PEM, leaf first then intermediates) and unencrypted key per interface,
+# relative to tls_provided_dir. Point interfaces at the same files if the
+# customer issued one certificate per host.
+tls_provided_files:
+  es-http: { cert: es-http.crt, key: es-http.key }
+  kibana: { cert: kibana.crt, key: kibana.key }
+  fleet-server: { cert: fleet-server.crt, key: fleet-server.key }
+  nginx: { cert: nginx.crt, key: nginx.key }
+
+# Where the pki role stages the external certs (both modes); roles read from
+# here: <name>.crt, <name>.key, and ca.crt (what clients must trust).
+tls_dir: "{{ pki_dir }}/external"
+# External interfaces and the hostname each cert must be valid for.
+tls_external_certs:
+  - { name: es-http, host: "{{ es_host }}" }
+  - { name: kibana, host: "{{ services_host }}" }
+  - { name: fleet-server, host: "{{ services_host }}" }
+  - { name: nginx, host: "{{ services_host }}" }
 
 # ---------------------------------------------------------------------------
 # Secrets -- defined in vault.yml (see vault.yml.example)
