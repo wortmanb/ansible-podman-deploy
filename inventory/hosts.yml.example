@@ -1,0 +1,13 @@
+---
+# Copy to hosts.yml (gitignored) and set your hostnames:
+#   cp inventory/hosts.yml.example inventory/hosts.yml
+all:
+  vars:
+    ansible_user: "{{ lookup('env', 'USER') }}"
+  children:
+    es_cluster:
+      hosts:
+        podman1.example.com:
+    services:
+      hosts:
+        podman2.example.com:

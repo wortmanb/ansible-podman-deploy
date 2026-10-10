@@ -6,8 +6,8 @@ systemd units.
 
 | Host | Containers | Published ports |
 |------|------------|-----------------|
-| `podman1.lab.thewortmans.org` | `es01`, `es02`, `es03` (all roles) | 9200, 9201, 9202 (HTTPS) |
-| `podman2.lab.thewortmans.org` | `kibana`, `fleet-server`, `epr`, `nginx` | 5601 (Kibana), 8220 (Fleet), 80/443 (artifact mirror), 8443 (EPR proxy) |
+| `podman1.example.com` | `es01`, `es02`, `es03` (all roles) | 9200, 9201, 9202 (HTTPS) |
+| `podman2.example.com` | `kibana`, `fleet-server`, `epr`, `nginx` | 5601 (Kibana), 8220 (Fleet), 80/443 (artifact mirror), 8443 (EPR proxy) |
 
 ## Why Ansible + Quadlet
 
@@ -27,7 +27,7 @@ build-cache.yml              # fills cache/ (run on an internet-connected box)
 teardown.yml                 # removes everything site.yml created on the hosts
 tasks/cache-image.yml        # pull + save one image (used by build-cache.yml)
 cache/                       # offline assets; gitignored, see "Air-gapped deployment"
-inventory/hosts.yml          # podman1 -> es_cluster, podman2 -> services
+inventory/hosts.yml.example  # copy to hosts.yml (gitignored): es_cluster + services hosts
 inventory/group_vars/        # versions, ports, heap, URLs, secrets (vault)
 roles/
   pki/            # controller: self-signed CA + per-service certs in ./pki
@@ -59,8 +59,16 @@ Python 3.9 on managed hosts (RHEL 9's system Python). Check the
 before raising the pin. `cryptography` is needed locally by the `pki` role.
 
 Targets: RHEL-family 9+ with Podman >= 4.4 (5.x recommended), SSH access as a
-user with sudo. The inventory connects as your local `$USER`; override
-`ansible_user` in `inventory/hosts.yml` if needed.
+user with sudo. Hostnames in this README (`podman1.example.com`, ...) are
+placeholders. Put your real hosts in a local, gitignored inventory:
+
+```bash
+cp inventory/hosts.yml.example inventory/hosts.yml
+$EDITOR inventory/hosts.yml
+```
+
+The inventory connects as your local `$USER`; override `ansible_user` there if
+needed. Certificates and service URLs are derived from these hostnames.
 
 ## Usage
 
@@ -99,11 +107,11 @@ podman volume rm es01-data es02-data es03-data
 
 Afterwards:
 
-* Kibana: https://podman2.lab.thewortmans.org:5601 (user `elastic`)
+* Kibana: https://podman2.example.com:5601 (user `elastic`)
 * Trust `pki/ca.crt` in your browser/OS and on enrolling agents. The
   `podman_host` role already adds it to system trust on podman1/podman2
   (disable with `podman_host_trust_ca: false`).
-* Enroll agents against `https://podman2.lab.thewortmans.org:8220` with
+* Enroll agents against `https://podman2.example.com:8220` with
   `--certificate-authorities=/path/to/ca.crt`.
 
 ## Air-gapped deployment
@@ -148,8 +156,9 @@ Re-running skips anything already cached. Archives are named by image and
 version, so building another version adds to `cache/` rather than replacing it;
 delete `cache/` first if you only want to transfer one version.
 
-Then copy the whole repo directory across, including the gitignored `cache/`,
-plus `pki/` and `vault.yml` if you want to keep the same CA and secrets.
+Then copy the whole repo directory across, including the gitignored `cache/`
+and `inventory/hosts.yml`, plus `pki/` and `vault.yml` if you want to keep the
+same CA and secrets.
 
 ### On the air-gapped side
 

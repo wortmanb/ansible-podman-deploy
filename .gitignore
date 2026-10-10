@@ -8,3 +8,5 @@ cache/
 .vault_pass*
 # Ansible Vault secrets (encrypted, but kept out of git)
 inventory/group_vars/all/vault.yml
+# Site-specific hostnames; see inventory/hosts.yml.example
+inventory/hosts.yml
