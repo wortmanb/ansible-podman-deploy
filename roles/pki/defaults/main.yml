@@ -1,0 +1,16 @@
+---
+pki_ca_common_name: Lab Elastic CA
+pki_ca_days: 3650
+pki_cert_days: 825
+
+# Common SANs added to every cert so health checks against localhost work.
+pki_local_sans: ["DNS:localhost", "IP:127.0.0.1"]
+
+# podman2 service certs (ES node certs are derived from es_nodes).
+pki_service_certs:
+  - name: kibana
+    sans: ["DNS:kibana", "DNS:{{ services_host }}"]
+  - name: fleet-server
+    sans: ["DNS:fleet-server", "DNS:{{ services_host }}"]
+  - name: nginx
+    sans: "{{ ['DNS:nginx', 'DNS:' ~ services_host] + (nginx_extra_sans | map('regex_replace', '^', 'DNS:') | list) }}"

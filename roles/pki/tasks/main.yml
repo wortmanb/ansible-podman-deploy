@@ -1,0 +1,62 @@
+---
+- name: Create PKI directory
+  ansible.builtin.file:
+    path: "{{ pki_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: CA private key
+  community.crypto.openssl_privatekey:
+    path: "{{ pki_dir }}/ca.key"
+    size: 4096
+    mode: "0600"
+
+- name: CA CSR
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ pki_dir }}/ca.key"
+    common_name: "{{ pki_ca_common_name }}"
+    use_common_name_for_san: false
+    basic_constraints: ["CA:TRUE"]
+    basic_constraints_critical: true
+    key_usage: [keyCertSign, cRLSign]
+    key_usage_critical: true
+  register: pki_ca_csr
+  changed_when: false
+
+- name: CA certificate
+  community.crypto.x509_certificate:
+    path: "{{ pki_dir }}/ca.crt"
+    csr_content: "{{ pki_ca_csr.csr }}"
+    privatekey_path: "{{ pki_dir }}/ca.key"
+    provider: selfsigned
+    selfsigned_not_after: "+{{ pki_ca_days }}d"
+    mode: "0644"
+
+- name: Elasticsearch node certificates
+  ansible.builtin.include_tasks: cert.yml
+  loop: "{{ es_nodes }}"
+  loop_control:
+    loop_var: pki_cert
+  vars:
+    pki_cert_name: "{{ pki_cert.name }}"
+    pki_cert_sans: ["DNS:{{ pki_cert.name }}", "DNS:{{ es_host }}"]
+
+- name: Service certificates
+  ansible.builtin.include_tasks: cert.yml
+  loop: "{{ pki_service_certs }}"
+  loop_control:
+    loop_var: pki_cert
+  vars:
+    pki_cert_name: "{{ pki_cert.name }}"
+    pki_cert_sans: "{{ pki_cert.sans }}"
+
+- name: Read CA certificate info
+  community.crypto.x509_certificate_info:
+    path: "{{ pki_dir }}/ca.crt"
+  register: pki_ca_info
+  tags: [always]
+
+- name: Record CA SHA-256 fingerprint (used by Fleet outputs)
+  ansible.builtin.set_fact:
+    pki_ca_fingerprint: "{{ pki_ca_info.fingerprints.sha256 | replace(':', '') | upper }}"
+  tags: [always]

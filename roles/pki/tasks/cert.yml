@@ -1,0 +1,26 @@
+---
+- name: "Generate private key for {{ pki_cert_name }}"
+  community.crypto.openssl_privatekey:
+    path: "{{ pki_dir }}/{{ pki_cert_name }}.key"
+    size: 2048
+    mode: "0600"
+
+- name: "Generate CSR for {{ pki_cert_name }}"
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ pki_dir }}/{{ pki_cert_name }}.key"
+    common_name: "{{ pki_cert_name }}"
+    subject_alt_name: "{{ pki_cert_sans + pki_local_sans }}"
+    key_usage: [digitalSignature, keyEncipherment]
+    extended_key_usage: [serverAuth, clientAuth]
+  register: pki_csr
+  changed_when: false
+
+- name: "Generate certificate for {{ pki_cert_name }}"
+  community.crypto.x509_certificate:
+    path: "{{ pki_dir }}/{{ pki_cert_name }}.crt"
+    csr_content: "{{ pki_csr.csr }}"
+    provider: ownca
+    ownca_path: "{{ pki_dir }}/ca.crt"
+    ownca_privatekey_path: "{{ pki_dir }}/ca.key"
+    ownca_not_after: "+{{ pki_cert_days }}d"
+    mode: "0644"
