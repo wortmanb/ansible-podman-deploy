@@ -1,0 +1,159 @@
+---
+# Remove everything site.yml created on the podman hosts, returning them to
+# "OS + podman packages installed" so a fresh deploy can be tested:
+#
+#   ansible-playbook teardown.yml --ask-vault-pass --ask-become-pass -e teardown_confirm=yes
+#
+# Removes: all containers/images/volumes/networks of the service user, its
+# quadlets, the service user and home directory (certs, configs, artifact
+# mirror, Fleet service token), sysctls, firewall ports, and the lab CA from
+# system trust. Keeps: OS packages, and pki/ + vault.yml on the controller.
+- name: Tear down Elastic deployment
+  hosts: es_cluster:services
+  become: true
+  gather_facts: false
+
+  pre_tasks:
+    - name: Require explicit confirmation
+      ansible.builtin.assert:
+        that: teardown_confirm | default('') == 'yes'
+        fail_msg: "This destroys all Elastic data on {{ inventory_hostname }}. Re-run with -e teardown_confirm=yes"
+
+    # Namespaced so role defaults can't override group_vars (e.g. sysctls).
+    - name: Load podman_host defaults
+      ansible.builtin.include_vars:
+        file: roles/podman_host/defaults/main.yml
+        name: teardown_podman_host
+
+  vars:
+    # Kernel defaults to restore for any sysctl site.yml set.
+    teardown_sysctl_defaults:
+      vm.max_map_count: 65530
+      net.ipv4.ip_unprivileged_port_start: 1024
+
+  tasks:
+    - name: Look up service user
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ podman_user }}"
+        fail_key: false
+
+    - name: Remove the service user's containers and data
+      when: ansible_facts.getent_passwd[podman_user] is not none
+      vars:
+        teardown_uid: "{{ ansible_facts.getent_passwd[podman_user][1] }}"
+        teardown_quadlet_dir: "{{ podman_home }}/.config/containers/systemd"
+      block:
+        - name: Check for the user's systemd instance
+          ansible.builtin.stat:
+            path: "/run/user/{{ teardown_uid }}/systemd"
+          register: teardown_runtime
+
+        - name: Find quadlet units
+          ansible.builtin.find:
+            paths: "{{ teardown_quadlet_dir }}"
+            patterns: ["*.container", "*.network", "*.volume"]
+          register: teardown_quadlets
+
+        # Quadlet units restart on failure, so stop them before removing
+        # anything. foo.container -> foo.service, foo.network -> foo-network.service
+        - name: Stop quadlet services
+          ansible.builtin.systemd_service:
+            name: "{{ item }}"
+            state: stopped
+            scope: user
+          loop: >-
+            {{ teardown_quadlets.files | map(attribute='path') | map('basename')
+               | map('regex_replace', '\.container$', '.service')
+               | map('regex_replace', '\.(network|volume)$', '-\1.service') | list }}
+          become: true
+          become_user: "{{ podman_user }}"
+          environment:
+            XDG_RUNTIME_DIR: "/run/user/{{ teardown_uid }}"
+          when: teardown_runtime.stat.exists
+
+        - name: Remove quadlet files
+          ansible.builtin.file:
+            path: "{{ teardown_quadlet_dir }}"
+            state: absent
+
+        - name: Reload user systemd
+          ansible.builtin.systemd_service:
+            daemon_reload: true
+            scope: user
+          become: true
+          become_user: "{{ podman_user }}"
+          environment:
+            XDG_RUNTIME_DIR: "/run/user/{{ teardown_uid }}"
+          when: teardown_runtime.stat.exists
+
+        - name: Remove all containers, images, volumes and networks
+          ansible.builtin.command: podman system reset --force
+          become: true
+          become_user: "{{ podman_user }}"
+          environment:
+            XDG_RUNTIME_DIR: "/run/user/{{ teardown_uid }}"
+          changed_when: true
+
+        - name: Disable lingering
+          ansible.builtin.command: "loginctl disable-linger {{ podman_user }}"
+          args:
+            removes: "/var/lib/systemd/linger/{{ podman_user }}"
+
+        - name: End the user's session and processes
+          ansible.builtin.command: "loginctl terminate-user {{ podman_user }}"
+          register: teardown_terminate
+          changed_when: teardown_terminate.rc == 0
+          failed_when: false
+
+        - name: Wait for the user's processes to exit
+          ansible.builtin.command: "pgrep -u {{ podman_user }}"
+          register: teardown_pgrep
+          until: teardown_pgrep.rc == 1
+          retries: 15
+          delay: 2
+          changed_when: false
+          failed_when: teardown_pgrep.rc not in [0, 1]
+
+        - name: Remove service user and home directory
+          ansible.builtin.user:
+            name: "{{ podman_user }}"
+            state: absent
+            remove: true
+            force: true
+
+    - name: Remove sysctl drop-in
+      ansible.builtin.file:
+        path: /etc/sysctl.d/90-podman-elastic.conf
+        state: absent
+
+    - name: Restore kernel defaults
+      ansible.builtin.shell: >-
+        [ "$(sysctl -n {{ item }})" = "{{ teardown_sysctl_defaults[item] }}" ]
+        || { sysctl -qw {{ item }}={{ teardown_sysctl_defaults[item] }} && echo changed; }
+      loop: "{{ podman_host_sysctls | default({}) | list }}"
+      register: teardown_sysctl
+      changed_when: "'changed' in teardown_sysctl.stdout"
+
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Close firewall ports
+      ansible.posix.firewalld:
+        port: "{{ item }}"
+        permanent: true
+        immediate: true
+        state: disabled
+      loop: "{{ podman_host_firewall_ports | default([]) }}"
+      when: ansible_facts.services['firewalld.service'].state | default('') == 'running'
+
+    - name: Remove lab CA from system trust
+      ansible.builtin.file:
+        path: "{{ teardown_podman_host.podman_host_ca_anchor }}"
+        state: absent
+      notify: Update CA trust
+
+  handlers:
+    - name: Update CA trust
+      ansible.builtin.command: update-ca-trust
+      changed_when: true

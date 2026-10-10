@@ -24,6 +24,7 @@ systemd units.
 ```
 site.yml                     # entry point: deploys from cache/
 build-cache.yml              # fills cache/ (run on an internet-connected box)
+teardown.yml                 # removes everything site.yml created on the hosts
 tasks/cache-image.yml        # pull + save one image (used by build-cache.yml)
 cache/                       # offline assets; gitignored, see "Air-gapped deployment"
 inventory/hosts.yml          # podman1 -> es_cluster, podman2 -> services
@@ -149,6 +150,24 @@ ansible-playbook site.yml --ask-vault-pass --ask-become-pass
 
 `site.yml` copies each image archive to a host only when that image is
 missing there, loads it with `podman load`, and deletes the archive.
+
+## Starting over
+
+`teardown.yml` returns the hosts to "OS + podman packages installed" so you can
+test a fresh deploy (for example, the air-gapped path with outbound internet
+blocked). It **destroys all Elastic data**, so it refuses to run without
+confirmation:
+
+```bash
+ansible-playbook teardown.yml --ask-vault-pass --ask-become-pass -e teardown_confirm=yes
+```
+
+It removes the service user's containers, images, volumes and networks, its
+quadlets, the `elastic` user and home directory (certs, configs, artifact
+mirror, Fleet service token), the sysctls, firewall ports and the lab CA in
+system trust. It keeps OS packages, and `pki/`, `vault.yml` and `cache/` on the
+controller, so the next `site.yml` reuses the same CA and passwords. Run
+`site.yml` twice afterwards, as on any fresh install.
 
 ## Notes and gotchas
 
