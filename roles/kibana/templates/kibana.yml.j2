@@ -1,0 +1,66 @@
+# {{ ansible_managed }}
+server.name: kibana
+server.host: "0.0.0.0"
+server.publicBaseUrl: "{{ kibana_url }}"
+server.ssl.enabled: true
+server.ssl.certificate: /usr/share/kibana/config/certs/kibana.crt
+server.ssl.key: /usr/share/kibana/config/certs/kibana.key
+
+elasticsearch.hosts: {{ es_urls | to_json }}
+elasticsearch.username: kibana_system
+elasticsearch.password: "{{ kibana_system_password }}"
+elasticsearch.ssl.certificateAuthorities: [/usr/share/kibana/config/certs/ca.crt]
+
+xpack.encryptedSavedObjects.encryptionKey: "{{ kibana_encryption_key }}"
+xpack.security.encryptionKey: "{{ kibana_security_key }}"
+xpack.reporting.encryptionKey: "{{ kibana_reporting_key }}"
+
+# ---------------------------------------------------------------------------
+# Fleet preconfiguration. Objects defined here are managed by this file and
+# are read-only in the Fleet UI.
+# ---------------------------------------------------------------------------
+xpack.fleet.registryUrl: "{{ kibana_registry_url }}"
+
+xpack.fleet.fleetServerHosts:
+  - id: default-fleet-server-host
+    name: Fleet Server ({{ services_host }})
+    is_default: true
+    host_urls: ["{{ fleet_server_url }}"]
+
+xpack.fleet.outputs:
+  - id: default-es-output
+    name: Elasticsearch ({{ es_cluster_name }})
+    type: elasticsearch
+    is_default: true
+    is_default_monitoring: true
+    hosts: {{ es_urls | to_json }}
+    ca_trusted_fingerprint: "{{ hostvars['localhost'].pki_ca_fingerprint }}"
+
+xpack.fleet.agentDownloadSources:
+  - id: local-artifact-mirror
+    name: Local artifact mirror
+    host: "{{ artifacts_public_url }}"
+    is_default: true
+
+xpack.fleet.packages:
+  - name: fleet_server
+    version: latest
+  - name: system
+    version: latest
+
+xpack.fleet.agentPolicies:
+  - name: Fleet Server Policy
+    id: {{ fleet_server_policy_id }}
+    namespace: default
+    is_default_fleet_server: true
+    is_managed: false
+    monitoring_enabled: [logs, metrics]
+    package_policies:
+      - name: fleet_server-1
+        id: default-fleet-server
+        package:
+          name: fleet_server
+      - name: system-fleet-server
+        id: system-fleet-server
+        package:
+          name: system

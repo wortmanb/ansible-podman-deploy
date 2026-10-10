@@ -1,0 +1,7 @@
+---
+- name: Restart nodes one at a time
+  ansible.builtin.include_tasks: restart_node.yml
+  loop: "{{ es_nodes }}"
+  loop_control:
+    loop_var: es_node
+    label: "{{ es_node.name }}"

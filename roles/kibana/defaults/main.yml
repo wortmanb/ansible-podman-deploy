@@ -1,0 +1,8 @@
+---
+kibana_image: "{{ elastic_registry }}/kibana/kibana:{{ elastic_version }}"
+kibana_base_dir: "{{ podman_home }}/kibana"
+kibana_quadlet_dir: "{{ podman_home }}/.config/containers/systemd"
+
+# Kibana talks to EPR directly over the podman network. Set to
+# "{{ epr_public_url }}" to route through nginx instead.
+kibana_registry_url: http://epr:8080

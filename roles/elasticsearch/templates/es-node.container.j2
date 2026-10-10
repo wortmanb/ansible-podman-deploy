@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Elasticsearch node {{ es_node.name }}
+
+[Container]
+Image={{ elasticsearch_image }}
+ContainerName={{ es_node.name }}
+HostName={{ es_node.name }}
+Network=elastic.network
+# Map the host service user to the image's elasticsearch user (uid 1000) so
+# bind-mounted certs owned by the service user are readable.
+UserNS=keep-id:uid=1000,gid=1000
+PublishPort={{ es_node.http_port }}:9200
+Volume={{ es_node.name }}-data:/usr/share/elasticsearch/data
+Volume={{ elasticsearch_base_dir }}/{{ es_node.name }}/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+Volume={{ elasticsearch_base_dir }}/{{ es_node.name }}/certs:/usr/share/elasticsearch/config/certs:ro,Z
+EnvironmentFile={{ elasticsearch_base_dir }}/{{ es_node.name }}/elasticsearch.env
+Ulimit=nofile=65535:65535
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

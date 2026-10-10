@@ -1,0 +1,34 @@
+---
+- name: Generate PKI on the controller
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - pki
+
+- name: Elasticsearch cluster (podman1)
+  hosts: es_cluster
+  become: true
+  roles:
+    - role: podman_host
+    - role: elasticsearch
+      become_user: "{{ podman_user }}"
+      environment: "{{ podman_env }}"
+
+- name: Kibana, Fleet Server, EPR, NGINX (podman2)
+  hosts: services
+  become: true
+  roles:
+    - role: podman_host
+    - role: epr
+      become_user: "{{ podman_user }}"
+      environment: "{{ podman_env }}"
+    - role: nginx
+      become_user: "{{ podman_user }}"
+      environment: "{{ podman_env }}"
+    - role: kibana
+      become_user: "{{ podman_user }}"
+      environment: "{{ podman_env }}"
+    - role: fleet_server
+      become_user: "{{ podman_user }}"
+      environment: "{{ podman_env }}"

@@ -1,0 +1,4 @@
+---
+elasticsearch_image: "{{ elastic_registry }}/elasticsearch/elasticsearch:{{ elastic_version }}"
+elasticsearch_base_dir: "{{ podman_home }}/elasticsearch"
+elasticsearch_quadlet_dir: "{{ podman_home }}/.config/containers/systemd"

@@ -1,0 +1,7 @@
+---
+podman_host_packages:
+  - podman
+  - container-selinux
+  - acl
+podman_host_sysctls: {}
+podman_host_firewall_ports: []

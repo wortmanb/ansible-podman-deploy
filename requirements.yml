@@ -1,0 +1,8 @@
+---
+collections:
+  - name: containers.podman
+    version: ">=1.16.0"
+  - name: community.crypto
+    version: ">=2.22.0"
+  - name: ansible.posix
+    version: ">=1.6.0"

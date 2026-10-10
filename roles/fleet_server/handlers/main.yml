@@ -1,0 +1,7 @@
+---
+- name: Restart fleet-server
+  ansible.builtin.systemd_service:
+    name: fleet-server
+    state: restarted
+    scope: user
+    daemon_reload: true

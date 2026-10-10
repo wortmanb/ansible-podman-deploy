@@ -1,0 +1,10 @@
+---
+podman_host_sysctls:
+  # Let the rootless nginx container bind 80/443.
+  net.ipv4.ip_unprivileged_port_start: 80
+podman_host_firewall_ports:
+  - "{{ kibana_port }}/tcp"
+  - "{{ fleet_server_port }}/tcp"
+  - "{{ nginx_http_port }}/tcp"
+  - "{{ nginx_artifacts_port }}/tcp"
+  - "{{ nginx_epr_port }}/tcp"

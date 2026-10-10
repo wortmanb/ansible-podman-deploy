@@ -1,0 +1,5 @@
+---
+fleet_server_image: "{{ elastic_registry }}/elastic-agent/elastic-agent:{{ elastic_version }}"
+fleet_server_base_dir: "{{ podman_home }}/fleet-server"
+fleet_server_quadlet_dir: "{{ podman_home }}/.config/containers/systemd"
+fleet_server_token_name: ansible-fleet-server

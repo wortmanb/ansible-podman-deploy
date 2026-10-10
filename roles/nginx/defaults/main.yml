@@ -1,0 +1,17 @@
+---
+nginx_image: docker.io/library/nginx:stable
+nginx_base_dir: "{{ podman_home }}/nginx"
+nginx_quadlet_dir: "{{ podman_home }}/.config/containers/systemd"
+nginx_artifacts_dir: "{{ podman_home }}/artifacts"
+
+# Mirror of https://artifacts.elastic.co/downloads/ served at /downloads/.
+# Elastic Agent appends beats/elastic-agent/<file> to the download source URL.
+nginx_artifact_mirror_upstream: https://artifacts.elastic.co/downloads
+nginx_artifact_mirror_platforms:
+  - linux-x86_64.tar.gz
+  - linux-arm64.tar.gz
+  - windows-x86_64.zip
+nginx_artifact_mirror_files: >-
+  {{ nginx_artifact_mirror_platforms
+     | map('regex_replace', '^', 'beats/elastic-agent/elastic-agent-' ~ elastic_version ~ '-')
+     | product(['', '.sha512', '.asc']) | map('join') | list }}

@@ -1,0 +1,24 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Kibana
+
+[Container]
+Image={{ kibana_image }}
+ContainerName=kibana
+HostName=kibana
+Network=elastic.network
+# Map the host service user to the image's kibana user (uid 1000).
+UserNS=keep-id:uid=1000,gid=1000
+PublishPort={{ kibana_port }}:5601
+Volume=kibana-data:/usr/share/kibana/data
+Volume={{ kibana_base_dir }}/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+Volume={{ kibana_base_dir }}/certs:/usr/share/kibana/config/certs:ro,Z
+# Trust the lab CA for outbound HTTPS (e.g. registry via nginx).
+Environment=NODE_EXTRA_CA_CERTS=/usr/share/kibana/config/certs/ca.crt
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

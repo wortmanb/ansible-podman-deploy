@@ -1,0 +1,57 @@
+---
+# ---------------------------------------------------------------------------
+# Global settings
+# ---------------------------------------------------------------------------
+elastic_version: "9.5.4"
+elastic_registry: docker.elastic.co
+
+# Rootless podman service account that owns every container.
+podman_user: elastic
+podman_home: "/home/{{ podman_user }}"
+
+# Hosts (first host of each inventory group).
+es_host: "{{ groups['es_cluster'][0] }}"
+services_host: "{{ groups['services'][0] }}"
+
+# Elasticsearch cluster layout on podman1. All nodes carry all roles.
+es_cluster_name: lab-cluster
+es_heap: 2g
+es_nodes:
+  - { name: es01, http_port: 9200 }
+  - { name: es02, http_port: 9201 }
+  - { name: es03, http_port: 9202 }
+es_urls: >-
+  {{ es_nodes | map(attribute='http_port') | map('string')
+     | map('regex_replace', '^', 'https://' ~ es_host ~ ':') | list }}
+
+# Service ports on podman2.
+kibana_port: 5601
+fleet_server_port: 8220
+nginx_http_port: 80
+nginx_artifacts_port: 443
+nginx_epr_port: 8443
+
+fleet_server_policy_id: fleet-server-policy
+
+kibana_url: "https://{{ services_host }}:{{ kibana_port }}"
+fleet_server_url: "https://{{ services_host }}:{{ fleet_server_port }}"
+epr_public_url: "https://{{ services_host }}:{{ nginx_epr_port }}"
+artifacts_public_url: "https://{{ services_host }}/downloads/"
+
+# Controller-side directory where the CA and service certs are generated.
+pki_dir: "{{ playbook_dir }}/pki"
+# Extra SANs added to the nginx cert (e.g. future epr./artifacts. CNAMEs).
+nginx_extra_sans: []
+
+# ---------------------------------------------------------------------------
+# Secrets -- defined in vault.yml (see vault.yml.example)
+# ---------------------------------------------------------------------------
+elastic_password: "{{ vault_elastic_password }}"
+kibana_system_password: "{{ vault_kibana_system_password }}"
+kibana_encryption_key: "{{ vault_kibana_encryption_key }}"
+kibana_security_key: "{{ vault_kibana_security_key }}"
+kibana_reporting_key: "{{ vault_kibana_reporting_key }}"
+
+# Environment for systemctl --user / podman when becoming the service user.
+podman_env:
+  XDG_RUNTIME_DIR: "/run/user/{{ podman_host_uid }}"

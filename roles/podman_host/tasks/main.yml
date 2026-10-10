@@ -1,0 +1,67 @@
+---
+- name: Install podman packages
+  ansible.builtin.dnf:
+    name: "{{ podman_host_packages }}"
+    state: present
+
+- name: Apply sysctls
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/90-podman-elastic.conf
+    reload: true
+  loop: "{{ podman_host_sysctls | dict2items }}"
+
+- name: Create rootless podman service user
+  ansible.builtin.user:
+    name: "{{ podman_user }}"
+    home: "{{ podman_home }}"
+    shell: /bin/bash
+    create_home: true
+
+- name: Verify subordinate UID/GID ranges exist
+  ansible.builtin.command: "grep -q '^{{ podman_user }}:' {{ item }}"
+  loop: [/etc/subuid, /etc/subgid]
+  changed_when: false
+
+- name: Enable lingering so user services run without a login session
+  ansible.builtin.command: "loginctl enable-linger {{ podman_user }}"
+  args:
+    creates: "/var/lib/systemd/linger/{{ podman_user }}"
+
+- name: Look up service user UID
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ podman_user }}"
+  tags: [always]
+
+- name: Record service user UID
+  ansible.builtin.set_fact:
+    podman_host_uid: "{{ ansible_facts.getent_passwd[podman_user][1] }}"
+  tags: [always]
+
+- name: Wait for the user runtime directory
+  ansible.builtin.wait_for:
+    path: "/run/user/{{ podman_host_uid }}/systemd"
+    timeout: 60
+
+- name: Create quadlet directory
+  ansible.builtin.file:
+    path: "{{ podman_home }}/{{ item }}"
+    state: directory
+    owner: "{{ podman_user }}"
+    group: "{{ podman_user }}"
+    mode: "0750"
+  loop: [.config, .config/containers, .config/containers/systemd]
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+- name: Open firewall ports
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ podman_host_firewall_ports }}"
+  when: ansible_facts.services['firewalld.service'].state | default('') == 'running'

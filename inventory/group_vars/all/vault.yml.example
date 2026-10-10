@@ -1,0 +1,9 @@
+---
+# Copy to vault.yml and encrypt:
+#   cp vault.yml.example vault.yml && ansible-vault encrypt vault.yml
+# Generate keys with: openssl rand -hex 32
+vault_elastic_password: "change-me"
+vault_kibana_system_password: "change-me"
+vault_kibana_encryption_key: "0000000000000000000000000000000000000000000000000000000000000000"
+vault_kibana_security_key: "0000000000000000000000000000000000000000000000000000000000000000"
+vault_kibana_reporting_key: "0000000000000000000000000000000000000000000000000000000000000000"

@@ -1,0 +1,7 @@
+---
+- name: Restart epr
+  ansible.builtin.systemd_service:
+    name: epr
+    state: restarted
+    scope: user
+    daemon_reload: true

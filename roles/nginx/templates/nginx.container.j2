@@ -1,0 +1,25 @@
+# {{ ansible_managed }}
+[Unit]
+Description=NGINX (EPR proxy + artifact mirror)
+# nginx resolves the "epr" upstream at startup.
+Requires=epr.service
+After=epr.service
+
+[Container]
+Image={{ nginx_image }}
+ContainerName=nginx
+HostName=nginx
+Network=elastic.network
+PublishPort={{ nginx_http_port }}:80
+PublishPort={{ nginx_artifacts_port }}:443
+PublishPort={{ nginx_epr_port }}:8443
+Volume={{ nginx_base_dir }}/default.conf:/etc/nginx/conf.d/default.conf:ro,Z
+Volume={{ nginx_base_dir }}/certs:/etc/nginx/certs:ro,Z
+Volume={{ nginx_artifacts_dir }}:/usr/share/nginx/artifacts:ro,Z
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

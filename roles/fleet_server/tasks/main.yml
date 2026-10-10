@@ -1,0 +1,99 @@
+---
+- name: Pull Elastic Agent image
+  containers.podman.podman_image:
+    name: "{{ fleet_server_image }}"
+  notify: Restart fleet-server
+
+- name: Fleet Server directories
+  ansible.builtin.file:
+    path: "{{ fleet_server_base_dir }}/certs"
+    state: directory
+    mode: "0750"
+
+- name: Fleet Server certificates
+  ansible.builtin.copy:
+    src: "{{ pki_dir }}/{{ item.src }}"
+    dest: "{{ fleet_server_base_dir }}/certs/{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: ca.crt, dest: ca.crt, mode: "0644" }
+    - { src: fleet-server.crt, dest: fleet-server.crt, mode: "0644" }
+    - { src: fleet-server.key, dest: fleet-server.key, mode: "0600" }
+  notify: Restart fleet-server
+
+# Service token values can only be read at creation time, so we persist it on
+# the host and only (re)create it when the local copy is missing.
+- name: Check for saved service token
+  ansible.builtin.stat:
+    path: "{{ fleet_server_base_dir }}/service-token"
+  register: fleet_server_token_file
+
+- name: Create service token
+  when: not fleet_server_token_file.stat.exists
+  no_log: true
+  block:
+    - name: Delete any stale service token
+      ansible.builtin.uri:
+        url: "{{ es_urls[0] }}/_security/service/elastic/fleet-server/credential/token/{{ fleet_server_token_name }}"
+        method: DELETE
+        url_username: elastic
+        url_password: "{{ elastic_password }}"
+        force_basic_auth: true
+        ca_path: "{{ fleet_server_base_dir }}/certs/ca.crt"
+        status_code: [200, 404]
+
+    - name: Create fleet-server service token
+      ansible.builtin.uri:
+        url: "{{ es_urls[0] }}/_security/service/elastic/fleet-server/credential/token/{{ fleet_server_token_name }}"
+        method: POST
+        url_username: elastic
+        url_password: "{{ elastic_password }}"
+        force_basic_auth: true
+        ca_path: "{{ fleet_server_base_dir }}/certs/ca.crt"
+      register: fleet_server_new_token
+
+    - name: Save service token
+      ansible.builtin.copy:
+        content: "{{ fleet_server_new_token.json.token.value }}"
+        dest: "{{ fleet_server_base_dir }}/service-token"
+        mode: "0600"
+
+- name: Read service token
+  ansible.builtin.slurp:
+    src: "{{ fleet_server_base_dir }}/service-token"
+  register: fleet_server_token
+  no_log: true
+
+- name: Fleet Server environment
+  ansible.builtin.template:
+    src: fleet-server.env.j2
+    dest: "{{ fleet_server_base_dir }}/fleet-server.env"
+    mode: "0600"
+  no_log: true
+  notify: Restart fleet-server
+
+- name: Fleet Server quadlet
+  ansible.builtin.template:
+    src: fleet-server.container.j2
+    dest: "{{ fleet_server_quadlet_dir }}/fleet-server.container"
+    mode: "0644"
+  notify: Restart fleet-server
+
+- name: Apply pending restarts
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure Fleet Server is running
+  ansible.builtin.systemd_service:
+    name: fleet-server
+    state: started
+    scope: user
+    daemon_reload: true
+
+- name: Wait for Fleet Server to report healthy
+  ansible.builtin.uri:
+    url: "https://localhost:{{ fleet_server_port }}/api/status"
+    ca_path: "{{ fleet_server_base_dir }}/certs/ca.crt"
+  register: fleet_server_status
+  until: fleet_server_status.json.status | default('') == 'HEALTHY'
+  retries: 60
+  delay: 10

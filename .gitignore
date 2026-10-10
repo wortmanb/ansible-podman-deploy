@@ -1,0 +1,6 @@
+# Generated PKI (contains the CA private key -- back it up somewhere safe)
+pki/
+collections/
+*.retry
+.venv/
+.vault_pass*

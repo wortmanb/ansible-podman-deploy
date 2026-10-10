@@ -1,0 +1,104 @@
+---
+# cluster.initial_master_nodes must only be set while forming a brand-new
+# cluster. If none of the data volumes exist yet, we are bootstrapping.
+- name: Check for existing data volumes
+  ansible.builtin.command: "podman volume exists {{ item.name }}-data"
+  loop: "{{ es_nodes }}"
+  register: elasticsearch_volume_check
+  changed_when: false
+  failed_when: elasticsearch_volume_check.rc not in [0, 1]
+
+- name: Determine whether this is a cluster bootstrap
+  ansible.builtin.set_fact:
+    elasticsearch_bootstrap: "{{ elasticsearch_volume_check.results | selectattr('rc', 'eq', 0) | list | length == 0 }}"
+
+- name: Pull Elasticsearch image
+  containers.podman.podman_image:
+    name: "{{ elasticsearch_image }}"
+
+- name: Elasticsearch podman network
+  ansible.builtin.template:
+    src: elastic.network.j2
+    dest: "{{ elasticsearch_quadlet_dir }}/elastic.network"
+    mode: "0644"
+  notify: Restart elasticsearch
+
+- name: Node directories
+  ansible.builtin.file:
+    path: "{{ elasticsearch_base_dir }}/{{ item.name }}/certs"
+    state: directory
+    mode: "0750"
+  loop: "{{ es_nodes }}"
+
+- name: Node certificates
+  ansible.builtin.copy:
+    src: "{{ pki_dir }}/{{ item.1 | replace('node', item.0.name) }}"
+    dest: "{{ elasticsearch_base_dir }}/{{ item.0.name }}/certs/{{ item.1 }}"
+    mode: "{{ '0600' if item.1.endswith('.key') else '0644' }}"
+  loop: "{{ es_nodes | product(['ca.crt', 'node.crt', 'node.key']) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}/{{ item.1 }}"
+  notify: Restart elasticsearch
+
+- name: Node configuration
+  ansible.builtin.template:
+    src: elasticsearch.yml.j2
+    dest: "{{ elasticsearch_base_dir }}/{{ es_node.name }}/elasticsearch.yml"
+    mode: "0644"
+  loop: "{{ es_nodes }}"
+  loop_control:
+    loop_var: es_node
+    label: "{{ es_node.name }}"
+  notify: Restart elasticsearch
+
+- name: Node environment (secrets)
+  ansible.builtin.template:
+    src: elasticsearch.env.j2
+    dest: "{{ elasticsearch_base_dir }}/{{ es_node.name }}/elasticsearch.env"
+    mode: "0600"
+  loop: "{{ es_nodes }}"
+  loop_control:
+    loop_var: es_node
+    label: "{{ es_node.name }}"
+  notify: Restart elasticsearch
+
+- name: Node quadlets
+  ansible.builtin.template:
+    src: es-node.container.j2
+    dest: "{{ elasticsearch_quadlet_dir }}/{{ es_node.name }}.container"
+    mode: "0644"
+  loop: "{{ es_nodes }}"
+  loop_control:
+    loop_var: es_node
+    label: "{{ es_node.name }}"
+  notify: Restart elasticsearch
+
+- name: Apply pending restarts
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure nodes are running
+  ansible.builtin.systemd_service:
+    name: "{{ item.name }}"
+    state: started
+    scope: user
+    daemon_reload: true
+  loop: "{{ es_nodes }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Wait for cluster to form
+  ansible.builtin.include_tasks: wait_for_cluster.yml
+
+- name: Set kibana_system password
+  ansible.builtin.uri:
+    url: "https://localhost:{{ es_nodes[0].http_port }}/_security/user/kibana_system/_password"
+    method: POST
+    url_username: elastic
+    url_password: "{{ elastic_password }}"
+    force_basic_auth: true
+    ca_path: "{{ elasticsearch_base_dir }}/{{ es_nodes[0].name }}/certs/ca.crt"
+    body_format: json
+    body:
+      password: "{{ kibana_system_password }}"
+  no_log: true
+  changed_when: false

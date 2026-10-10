@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Elastic Package Registry
+
+[Container]
+Image={{ epr_image }}
+ContainerName=epr
+HostName=epr
+Network=elastic.network
+# Not published: reached by Kibana over the podman network and externally
+# through nginx.
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

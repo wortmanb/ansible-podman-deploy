@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Elastic Fleet Server
+After=kibana.service
+
+[Container]
+Image={{ fleet_server_image }}
+ContainerName=fleet-server
+HostName=fleet-server
+Network=elastic.network
+# Map the host service user to the image's elastic-agent user (uid 1000).
+UserNS=keep-id:uid=1000,gid=1000
+PublishPort={{ fleet_server_port }}:{{ fleet_server_port }}
+Volume=fleet-server-state:/usr/share/elastic-agent/state
+Volume={{ fleet_server_base_dir }}/certs:/certs:ro,Z
+EnvironmentFile={{ fleet_server_base_dir }}/fleet-server.env
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target
