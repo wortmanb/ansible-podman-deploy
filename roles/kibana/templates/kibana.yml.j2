@@ -36,11 +36,8 @@ xpack.fleet.outputs:
     hosts: {{ es_urls | to_json }}
     ca_trusted_fingerprint: "{{ hostvars['localhost'].pki_ca_fingerprint }}"
 
-xpack.fleet.agentDownloadSources:
-  - id: local-artifact-mirror
-    name: Local artifact mirror
-    host: "{{ artifacts_public_url }}"
-    is_default: true
+# The agent binary download source (artifact mirror) can't be preconfigured
+# here; the kibana role sets it via the Fleet API.
 
 xpack.fleet.packages:
   - name: fleet_server

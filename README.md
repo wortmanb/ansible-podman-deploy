@@ -94,8 +94,10 @@ Afterwards:
 * **PKI**: `pki/` holds the CA private key and is gitignored. Back it up.
   Deleting it regenerates every cert, which means a restart of everything.
 * **Fleet is preconfigured** in `kibana.yml` (Fleet Server host, ES output with
-  CA fingerprint, agent download source, Fleet Server policy). These objects
-  are read-only in the UI. Change them in `roles/kibana/templates/kibana.yml.j2`.
+  CA fingerprint, Fleet Server policy). These objects are read-only in the UI.
+  Change them in `roles/kibana/templates/kibana.yml.j2`. The agent download
+  source can't be preconfigured, so the kibana role sets it via the Fleet API
+  (it stays editable in the UI, but the next playbook run resets it).
 * **EPR**: Kibana reaches EPR directly at `http://epr:8080` on the podman
   network. nginx exposes it at `https://podman2...:8443` for external use. Set
   `kibana_registry_url: "{{ epr_public_url }}"` to send Kibana through nginx.

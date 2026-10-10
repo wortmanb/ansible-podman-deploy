@@ -6,3 +6,6 @@ kibana_quadlet_dir: "{{ podman_home }}/.config/containers/systemd"
 # Kibana talks to EPR directly over the podman network. Set to
 # "{{ epr_public_url }}" to route through nginx instead.
 kibana_registry_url: http://epr:8080
+
+kibana_download_source_id: local-artifact-mirror
+kibana_download_source_name: Local artifact mirror

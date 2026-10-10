@@ -68,3 +68,35 @@
   until: kibana_fleet_policy.status | default(0) == 200
   retries: 30
   delay: 10
+
+- name: Look up the agent download source
+  ansible.builtin.uri:
+    url: "https://localhost:{{ kibana_port }}/api/fleet/agent_download_sources/{{ kibana_download_source_id }}"
+    url_username: elastic
+    url_password: "{{ elastic_password }}"
+    force_basic_auth: true
+    ca_path: "{{ kibana_base_dir }}/certs/ca.crt"
+    status_code: [200, 404]
+  register: kibana_download_source
+
+- name: Point Fleet at the local artifact mirror
+  ansible.builtin.uri:
+    url: >-
+      https://localhost:{{ kibana_port }}/api/fleet/agent_download_sources{{
+      '/' ~ kibana_download_source_id if kibana_download_source.status == 200 else '' }}
+    method: "{{ 'PUT' if kibana_download_source.status == 200 else 'POST' }}"
+    url_username: elastic
+    url_password: "{{ elastic_password }}"
+    force_basic_auth: true
+    ca_path: "{{ kibana_base_dir }}/certs/ca.crt"
+    headers:
+      kbn-xsrf: "true"
+    body_format: json
+    body: >-
+      {{ {'name': kibana_download_source_name, 'host': artifacts_public_url, 'is_default': true}
+         | combine({} if kibana_download_source.status == 200 else {'id': kibana_download_source_id}) }}
+  when: >-
+    kibana_download_source.status == 404 or
+    kibana_download_source.json.item.host != artifacts_public_url or
+    not kibana_download_source.json.item.is_default
+  changed_when: true
