@@ -22,5 +22,6 @@
     provider: ownca
     ownca_path: "{{ pki_dir }}/ca.crt"
     ownca_privatekey_path: "{{ pki_dir }}/ca.key"
+    ownca_not_before: "{{ pki_backdate }}"
     ownca_not_after: "+{{ pki_cert_days }}d"
     mode: "0644"

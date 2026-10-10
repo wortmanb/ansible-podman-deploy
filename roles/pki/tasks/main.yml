@@ -36,6 +36,7 @@
     csr_content: "{{ pki_ca_csr.csr }}"
     privatekey_path: "{{ pki_dir }}/ca.key"
     provider: selfsigned
+    selfsigned_not_before: "{{ pki_backdate }}"
     selfsigned_not_after: "+{{ pki_ca_days }}d"
     mode: "0644"
 

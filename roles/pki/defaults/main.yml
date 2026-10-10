@@ -2,6 +2,9 @@
 pki_ca_common_name: Lab Elastic CA
 pki_ca_days: 3650
 pki_cert_days: 825
+# Start validity this far in the past, so hosts with a slightly slow clock
+# (e.g. just after a VM snapshot rollback) don't reject brand-new certs.
+pki_backdate: "-1h"
 
 # Common SANs added to every generated cert.
 pki_local_sans: ["DNS:localhost", "IP:127.0.0.1"]

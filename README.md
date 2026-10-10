@@ -352,6 +352,17 @@ Run `site.yml` twice afterwards, as on any fresh install.
   `elasticsearch-reset-password`).
 * **Rootless low ports**: podman2 gets `net.ipv4.ip_unprivileged_port_start=80`
   so nginx can bind 80/443.
+* **Clocks**: TLS fails with "certificate is not yet valid" if a host's clock
+  is behind the controller's. Generated certs are backdated by `pki_backdate`
+  (1 hour) to absorb small skew. VMs restored from a snapshot can be hours
+  behind, while chrony (resumed from the snapshot) still believes it's in sync
+  and corrects only gradually. Restart it on each host before deploying so it
+  re-measures and steps the clock:
+
+  ```bash
+  ansible all -b -m ansible.builtin.shell --ask-vault-pass --ask-become-pass \
+    -a 'systemctl restart chronyd && sleep 20 && chronyc makestep && date -u'
+  ```
 * **Memory**: three ES nodes at `es_heap: 2g` need ~12 GB+ RAM on podman1.
 * Rolling restarts wait for all nodes and yellow health between nodes, but
   don't disable shard allocation. That's fine for a lab, but do it manually
