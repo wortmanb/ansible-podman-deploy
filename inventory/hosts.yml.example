@@ -4,6 +4,9 @@
 all:
   vars:
     ansible_user: "{{ lookup('env', 'USER') }}"
+    # RHEL 8's system python3 is 3.6, too old for ansible-core 2.20;
+    # bootstrap-rhel8.yml installs this one.
+    ansible_python_interpreter: /usr/bin/python3.12
   children:
     es_cluster:
       hosts:

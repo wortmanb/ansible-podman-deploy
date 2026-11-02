@@ -1,6 +1,7 @@
 # Controller (Ansible control node) Python dependencies.
 # ansible-core 2.20 supports controller Python 3.12-3.14 and target
-# Python 3.9-3.14 (RHEL 9 ships 3.9). Re-check before moving to 2.21.
+# Python 3.9-3.14. RHEL 9 ships 3.9; RHEL 8 ships 3.6, so this branch installs
+# python3.12 there (bootstrap-rhel8.yml). Re-check before moving to 2.21.
 ansible-core>=2.20,<2.21
 cryptography>=43
 ansible-lint

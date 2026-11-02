@@ -142,14 +142,27 @@
     - name: Gather service facts
       ansible.builtin.service_facts:
 
-    - name: Close firewall ports
-      ansible.posix.firewalld:
-        port: "{{ item }}"
-        permanent: true
-        immediate: true
-        state: disabled
+    - name: Check which firewall ports are open
+      ansible.builtin.command: "firewall-cmd --permanent --query-port={{ item }}"
       loop: "{{ podman_host_firewall_ports | default([]) }}"
+      register: teardown_fw_query
+      changed_when: false
+      failed_when: teardown_fw_query.rc not in [0, 1]
       when: ansible_facts.services['firewalld.service'].state | default('') == 'running'
+
+    - name: Close firewall ports
+      ansible.builtin.command: "firewall-cmd --permanent --remove-port={{ item.item }}"
+      loop: "{{ teardown_fw_query.results | default([]) | rejectattr('skipped', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.rc == 0
+      register: teardown_fw_remove
+      changed_when: true
+
+    - name: Reload firewalld
+      ansible.builtin.command: firewall-cmd --reload
+      when: teardown_fw_remove is changed
+      changed_when: true
 
     - name: Remove lab CA from system trust
       ansible.builtin.file:

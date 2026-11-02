@@ -12,7 +12,8 @@ Network=elastic.network
 UserNS=keep-id:uid=1000,gid=1000
 PublishPort={{ fleet_server_port }}:{{ fleet_server_port }}
 # Reach our own public name locally rather than hairpinning through the host.
-AddHost={{ services_host }}:127.0.0.1
+# PodmanArgs rather than AddHost=, which older Quadlet versions (RHEL 8) lack.
+PodmanArgs=--add-host={{ services_host }}:127.0.0.1
 Volume=fleet-server-state:/usr/share/elastic-agent/state
 Volume={{ fleet_server_base_dir }}/certs:/certs:ro,Z
 EnvironmentFile={{ fleet_server_base_dir }}/fleet-server.env

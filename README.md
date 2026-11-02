@@ -26,6 +26,7 @@ by the network's owner.
 ```
 site.yml                     # entry point: deploys from cache/
 build-cache.yml              # fills cache/ (run on an internet-connected box)
+bootstrap-rhel8.yml          # one-time: installs python3.12 + selinux shim on RHEL 8 hosts
 teardown.yml                 # removes everything site.yml created on the hosts
 tasks/cache-image.yml        # pull + save one image (used by build-cache.yml)
 cache/                       # offline assets; gitignored, see "Air-gapped deployment"
@@ -64,9 +65,34 @@ Python 3.9 on managed hosts (RHEL 9's system Python). Check the
 [support matrix](https://docs.ansible.com/projects/ansible/latest/reference_appendices/release_and_maintenance.html)
 before raising the pin. `cryptography` is needed locally by the `pki` role.
 
-Targets: RHEL-family 9+ with Podman >= 4.4 (5.x recommended), SSH access as a
+Targets: RHEL-family 8.10+ (this branch) with Podman >= 4.4, SSH access as a
 user with sudo, and `podman`, `container-selinux`, `acl` and `ca-certificates`
 installable with `dnf` (from a local repository on air-gapped networks).
+
+## RHEL 8.10 targets
+
+This branch deploys to RHEL 8.10 (kernel 4.18.0-553.x). Differences from RHEL 9:
+
+* **Python.** ansible-core 2.20 needs Python 3.9+ on managed hosts; RHEL 8's
+  `python3` is 3.6. Run `bootstrap-rhel8.yml` once per host (after
+  `build-cache.yml`). It installs `python3.12` from AppStream and the PyPI
+  `selinux` shim (shipped from `cache/python/`), since `python3-libselinux`
+  only exists for 3.6. `inventory/hosts.yml.example` sets
+  `ansible_python_interpreter: /usr/bin/python3.12`.
+* **No `dnf`/`firewalld` modules.** Both need system-Python bindings, so the
+  roles call `dnf` and `firewall-cmd` directly.
+* **cgroup v2.** RHEL 8 boots cgroup v1, which rootless podman can't use. With
+  `podman_host_manage_cgroups: true` (default) `site.yml` adds
+  `systemd.unified_cgroup_hierarchy=1` via `grubby` and **reboots the host**
+  once. Set it `false` to fail instead.
+* **Preflight checks** in `podman_host` stop the run early unless podman is
+  >= 4.4, the network backend is netavark, and user namespaces are enabled.
+  The role installs `netavark` and `aardvark-dns`.
+* Fleet's hairpin entry uses `PodmanArgs=--add-host=` because RHEL 8's Quadlet
+  may lack `AddHost=`.
+
+Order: `build-cache.yml`, then `bootstrap-rhel8.yml`, then `site.yml`. Check
+the hosts first with `cat /etc/redhat-release` and `uname -r`.
 
 ## Site-specific files
 

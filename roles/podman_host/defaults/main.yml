@@ -4,9 +4,19 @@ podman_host_packages:
   - container-selinux
   - acl
   - ca-certificates
+  # Container-name resolution on the podman network (see preflight checks).
+  - netavark
+  - aardvark-dns
 podman_host_sysctls: {}
 podman_host_firewall_ports: []
 
 # Install the external CA bundle (generated or provided) into system trust.
 podman_host_trust_ca: true
 podman_host_ca_anchor: /etc/pki/ca-trust/source/anchors/lab-elastic-ca.crt
+
+# Quadlet landed in podman 4.4.
+podman_host_min_podman: "4.4"
+# RHEL 8 boots cgroup v1, which rootless podman can't use. When true the role
+# adds systemd.unified_cgroup_hierarchy=1 to the kernel command line and
+# reboots the host. Set false to fail instead.
+podman_host_manage_cgroups: true

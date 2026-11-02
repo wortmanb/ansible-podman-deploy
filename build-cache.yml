@@ -22,6 +22,10 @@
     build_cache_platform: linux/amd64
     # Controller Python versions to fetch wheels for (ansible-core 2.20).
     build_cache_python_versions: ["3.12", "3.13", "3.14"]
+    # Pure-Python wheels for the managed hosts (bootstrap-rhel8.yml).
+    # selinux: ctypes bindings so modules work on SELinux-enforcing RHEL 8
+    # under python3.12 (python3-libselinux is built for the system 3.6 only).
+    build_cache_target_wheels: ["selinux==0.3.0"]
     build_cache_wheel_platforms:
       - manylinux2014_x86_64
       - manylinux_2_17_x86_64
@@ -135,6 +139,15 @@
       loop: "{{ build_cache_python_versions }}"
       register: build_cache_pip
       changed_when: "'Saved ' in build_cache_pip.stdout"
+
+    - name: Download managed-host Python wheels
+      ansible.builtin.command:
+        cmd: >-
+          {{ ansible_playbook_python }} -m pip download {{ item }} --no-deps
+          --only-binary=:all: -d {{ cache_dir }}/python
+      loop: "{{ build_cache_target_wheels }}"
+      register: build_cache_target_pip
+      changed_when: "'Saved ' in build_cache_target_pip.stdout"
 
     # --- Integrity manifest -----------------------------------------------
     - name: Write SHA256SUMS

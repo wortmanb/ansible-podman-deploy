@@ -1,0 +1,71 @@
+---
+# One-time prep of RHEL 8 hosts, run before site.yml:
+#
+#   ansible-playbook bootstrap-rhel8.yml --ask-vault-pass --ask-become-pass
+#
+# ansible-core 2.20 needs Python 3.9+ on managed hosts, but RHEL 8's system
+# python3 is 3.6. This installs python3.12 from AppStream, plus the PyPI
+# `selinux` shim (python3-libselinux only exists for the system 3.6, and
+# without bindings Ansible refuses to write files on SELinux-enforcing hosts).
+#
+# It uses only raw/script transport, so it needs no Python on the target, and
+# ships the shim wheel from cache/python/ so air-gapped hosts need nothing from
+# PyPI. dnf must still reach a RHEL 8 BaseOS/AppStream repo. The inventory is
+# still loaded, so vault.yml is needed even though no secrets are used.
+- name: Prepare the bootstrap script on the controller
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  tasks:
+    - name: Find the selinux wheel in the cache
+      ansible.builtin.find:
+        paths: "{{ cache_dir }}/python"
+        patterns: "selinux-*.whl"
+      register: bootstrap_wheels
+
+    - name: Require the selinux wheel
+      ansible.builtin.assert:
+        that: bootstrap_wheels.files | length > 0
+        fail_msg: No selinux wheel in cache/python/. Run build-cache.yml first.
+
+    - name: Read the wheel
+      ansible.builtin.slurp:
+        src: "{{ (bootstrap_wheels.files | sort(attribute='path') | last).path }}"
+      register: bootstrap_wheel
+
+    - name: Create a temporary script file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .sh
+      register: bootstrap_script
+
+    - name: Render the bootstrap script
+      ansible.builtin.template:
+        src: bootstrap-rhel8.sh.j2
+        dest: "{{ bootstrap_script.path }}"
+        mode: "0600"
+      vars:
+        bootstrap_wheel_name: "{{ (bootstrap_wheels.files | sort(attribute='path') | last).path | basename }}"
+        bootstrap_wheel_b64: "{{ bootstrap_wheel.content | regex_replace('(.{76})', '\\1\n') }}"
+
+- name: Install Python on RHEL 8 hosts
+  hosts: es_cluster:services
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Run the bootstrap script
+      ansible.builtin.script: "{{ hostvars['localhost'].bootstrap_script.path }}"
+      register: bootstrap_result
+      changed_when: "'installed selinux' in bootstrap_result.stdout"
+
+- name: Clean up
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Remove the temporary script
+      ansible.builtin.file:
+        path: "{{ bootstrap_script.path }}"
+        state: absent
