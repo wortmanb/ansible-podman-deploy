@@ -150,6 +150,12 @@
 # Rootless podman on cgroup v2 needs the user's systemd instance to own the
 # cpu/io/memory/pids controllers; otherwise runc fails with "pids.max: no such
 # file or directory". RHEL 8's systemd (239) doesn't delegate them by default.
+- name: Create the user@ service drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/user@.service.d
+    state: directory
+    mode: "0755"
+
 - name: Delegate cgroup controllers to user services
   ansible.builtin.copy:
     dest: /etc/systemd/system/user@.service.d/delegate.conf
@@ -160,7 +166,6 @@
     owner: root
     group: root
     mode: "0644"
-    directory_mode: "0755"
   register: podman_host_delegate
 
 - name: Reload systemd after changing delegation
