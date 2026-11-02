@@ -34,15 +34,59 @@
   changed_when: false
 
 # The containers resolve each other by name (es01, epr, ...), which needs
-# netavark + aardvark-dns. Hosts upgraded from an old RHEL 8 podman can still
-# be on the CNI backend.
-- name: Require the netavark network backend
-  ansible.builtin.assert:
-    that: podman_host_netbackend.stdout | trim == 'netavark'
-    fail_msg: >-
-      podman uses the '{{ podman_host_netbackend.stdout | trim }}' network backend, not netavark.
-      Run 'podman system reset' on a host with no containers you need, or set
-      network_backend = "netavark" in /etc/containers/containers.conf.
+# netavark + aardvark-dns. RHEL 8 podman records its backend on first use, so
+# a host that ran podman before netavark was installed stays on CNI until
+# `podman system reset`. That wipes root-owned containers/images, so it only
+# runs when there are none.
+- name: Switch podman to the netavark network backend
+  when: podman_host_netbackend.stdout | trim != 'netavark'
+  block:
+    - name: Require permission to reset podman
+      ansible.builtin.assert:
+        that: podman_host_manage_network_backend | bool
+        fail_msg: >-
+          podman uses the '{{ podman_host_netbackend.stdout | trim }}' network backend, not netavark.
+          Set podman_host_manage_network_backend: true to let this playbook reset it,
+          or run 'podman system reset' yourself.
+
+    - name: List root-owned podman containers, images and volumes
+      ansible.builtin.shell: "podman ps -aq; podman images -q; podman volume ls -q"
+      register: podman_host_root_objects
+      changed_when: false
+
+    - name: Refuse to reset a host that has root podman data
+      ansible.builtin.assert:
+        that: podman_host_root_objects.stdout | trim == ''
+        fail_msg: >-
+          Root podman on {{ inventory_hostname }} has containers, images or volumes, so it
+          won't be reset automatically. Remove them (or run 'podman system reset') and rerun.
+
+    - name: Ensure the containers.conf.d directory exists
+      ansible.builtin.file:
+        path: /etc/containers/containers.conf.d
+        state: directory
+        mode: "0755"
+
+    - name: Select netavark in containers.conf
+      ansible.builtin.copy:
+        dest: /etc/containers/containers.conf.d/50-netavark.conf
+        content: |
+          # Managed by Ansible (podman_host role)
+          [network]
+          network_backend = "netavark"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reset podman so it adopts the new backend
+      ansible.builtin.command: podman system reset --force
+      changed_when: true
+
+    - name: Re-check podman network backend
+      ansible.builtin.command: "podman info --format {% raw %}'{{.Host.NetworkBackend}}'{% endraw %}"
+      register: podman_host_netbackend_after
+      changed_when: false
+      failed_when: podman_host_netbackend_after.stdout | trim != 'netavark'
 
 - name: Read user namespace limit
   ansible.builtin.command: "sysctl -n user.max_user_namespaces"

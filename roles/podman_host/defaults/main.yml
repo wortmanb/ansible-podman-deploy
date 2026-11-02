@@ -20,3 +20,6 @@ podman_host_min_podman: "4.4"
 # adds systemd.unified_cgroup_hierarchy=1 to the kernel command line and
 # reboots the host. Set false to fail instead.
 podman_host_manage_cgroups: true
+# On a host still using the CNI backend, switch to netavark and run
+# `podman system reset` (only if root podman has no containers/images/volumes).
+podman_host_manage_network_backend: true
