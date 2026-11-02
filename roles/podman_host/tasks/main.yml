@@ -147,6 +147,27 @@
     reload: true
   loop: "{{ podman_host_sysctls | dict2items }}"
 
+# Rootless podman on cgroup v2 needs the user's systemd instance to own the
+# cpu/io/memory/pids controllers; otherwise runc fails with "pids.max: no such
+# file or directory". RHEL 8's systemd (239) doesn't delegate them by default.
+- name: Delegate cgroup controllers to user services
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/user@.service.d/delegate.conf
+    content: |
+      # Managed by Ansible (podman_host role)
+      [Service]
+      Delegate={{ podman_host_cgroup_delegate }}
+    owner: root
+    group: root
+    mode: "0644"
+    directory_mode: "0755"
+  register: podman_host_delegate
+
+- name: Reload systemd after changing delegation
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: podman_host_delegate is changed
+
 - name: Create rootless podman service user
   ansible.builtin.user:
     name: "{{ podman_user }}"
@@ -174,6 +195,13 @@
   ansible.builtin.set_fact:
     podman_host_uid: "{{ ansible_facts.getent_passwd[podman_user][1] }}"
   tags: [always]
+
+# A running user manager only picks up new delegation when it restarts.
+- name: Restart the user manager to apply cgroup delegation
+  ansible.builtin.systemd_service:
+    name: "user@{{ podman_host_uid }}.service"
+    state: restarted
+  when: podman_host_delegate is changed
 
 - name: Wait for the user runtime directory
   ansible.builtin.wait_for:

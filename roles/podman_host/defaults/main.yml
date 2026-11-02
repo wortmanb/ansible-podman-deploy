@@ -23,3 +23,6 @@ podman_host_manage_cgroups: true
 # On a host still using the CNI backend, switch to netavark and run
 # `podman system reset` (only if root podman has no containers/images/volumes).
 podman_host_manage_network_backend: true
+
+# Controllers delegated to the service user's systemd instance (cgroup v2).
+podman_host_cgroup_delegate: "cpu cpuset io memory pids"
