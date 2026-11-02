@@ -15,8 +15,29 @@
   register: pki_csr
   changed_when: false
 
+# x509_certificate keeps an existing certificate that is still valid, even when
+# the names we now want (new hostnames) differ, so compare SANs ourselves.
+- name: "Look for an existing certificate for {{ pki_cert_name }}"
+  ansible.builtin.stat:
+    path: "{{ pki_dir }}/{{ pki_cert_name }}.crt"
+  register: pki_existing
+
+- name: "Read existing certificate for {{ pki_cert_name }}"
+  community.crypto.x509_certificate_info:
+    path: "{{ pki_dir }}/{{ pki_cert_name }}.crt"
+  register: pki_existing_info
+  when: pki_existing.stat.exists
+
+- name: "Reissue {{ pki_cert_name }} if its names changed"
+  ansible.builtin.set_fact:
+    pki_cert_stale: >-
+      {{ pki_existing.stat.exists and
+         ((pki_existing_info.subject_alt_name | default([]) | map('lower') | sort)
+          != ((pki_cert_sans + pki_local_sans) | map('lower') | sort)) }}
+
 - name: "Generate certificate for {{ pki_cert_name }}"
   community.crypto.x509_certificate:
+    force: "{{ pki_cert_stale }}"
     path: "{{ pki_dir }}/{{ pki_cert_name }}.crt"
     csr_content: "{{ pki_csr.csr }}"
     provider: ownca
